@@ -4,7 +4,7 @@ import pytest
 
 from hpce_utils.env import lmod
 
-if lmod.get_lmod_executable()
+if lmod.get_lmod_executable():
     pytest.skip("Could not find LMOD executable", allow_module_level=True)
 
 def test_use() -> None:
