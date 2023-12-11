@@ -1,0 +1,9 @@
+#!/bin/bash
+#$ -N {{ name }}
+#$ -l h_rt=00:01:00
+#$ -hold_jid {{ hold_job_id }}
+#$ -o {{ log_dir | default("./log", true) }}/
+#$ -e {{ log_dir | default("./log", true) }}/
+{% if user_email %}#$ -M {{ user_email }}
+#$ -m ea {% endif %}
+{{ cmd }}

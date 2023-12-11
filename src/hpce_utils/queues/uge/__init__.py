@@ -1,12 +1,6 @@
-import logging
-import os
-from pathlib import Path
-from typing import Any, Dict, Optional
-
-_logger = logging.getLogger(__name__)
-
-
 """
+Module for manging UGE submission and environments.
+
 ARC – The architecture name of the node on which the job is running. The
 name is compiled into the sge_execd binary.
 
@@ -122,6 +116,15 @@ MKL_NUM_THREADS - Number of Intel MathKernel threads
 NUMEXPR_NUM_THREADS - Fast numerical expression evaluator for NumPy
 """
 
+import logging
+import os
+from pathlib import Path
+from typing import Any, Dict, Optional
+
+from hpce_utils.queues.uge import constants
+from hpce_utils.shell import which
+
+_logger = logging.getLogger(__name__)
 
 UGE_KEYWORDS = [
     "ARC",
@@ -169,6 +172,17 @@ UGE_KEYWORDS = [
     "NUMEXPR_NUM_THREADS",
     "HOSTNAME",
 ]
+
+
+def has_uge() -> bool:
+    """Check if cluster has UGE setup"""
+
+    exe = which(constants.qsub)
+
+    if exe is not None:
+        return True
+
+    return False
 
 
 def is_uge() -> bool:

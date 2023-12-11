@@ -7,15 +7,10 @@
 #$ -pe smp {{ cores }}{% if task_stop %}
 #$ -t {{ task_start | default(1, true) }}-{{ task_stop }}:{{ task_step | default(1, true) }}
 #$ -tc {{ task_concurrent }}{% endif %}
-#$ -o {{ log_dir | default("./log/", true) }}
-#$ -e {{ log_dir | default("./log/", true) }}
+#$ -o {{ log_dir | default("./log", true) }}
+#$ -e {{ log_dir | default("./log", true) }}
 
-# Set cores
-CORES={{ cores }}
-export OPENBLAS_NUM_THREADS=$CORES
-export OMP_NUM_THREADS=$CORES
-export MKL_NUM_THREADS=$CORES
-{% if cwd %}cd {{ cwd }}\n\n{% endif %}\
-{% for key, value in environ.items() %}export {{ key }}={{ value }}\n{% endfor %}\
+{% if cwd %}cd {{ cwd }}\n\n{% endif %}
+{% for key, value in environ.items() %}export {{ key }}={{ value }}\n{% endfor %}
 
 {{ cmd }}

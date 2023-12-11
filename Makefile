@@ -30,7 +30,7 @@ pre-commit-all:
 test: test-unit
 
 test-unit:
-	${python} -m pytest --basetemp="./.pytest_scr" -vrs tests/
+	${python} -m pytest --basetemp=".pytest" -vrs tests/
 
 # test-ipynb:
 # 	jupytext --output _tmp_script.py notebooks/example_demo.ipynb

@@ -1,14 +1,19 @@
 import datetime
+import logging
 import os
 import re
 import subprocess
-import sys
 import time
 from typing import List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd  # type: ignore
+from pandas import DataFrame  # type: ignore
 from tqdm import tqdm  # type: ignore
+
+from hpce_utils.shell import execute  # type: ignore
+
+logger = logging.getLogger(__name__)
 
 # tqdm default view
 TQDM_OPTIONS = {
@@ -44,7 +49,7 @@ TQDM_OPTIONS = {
 """
 
 pending_tags = ["qw", "hqw", "hRwq"]
-running_tags = ["r", "t", "Rr", "Rt"]
+running_tags = ["r", "t", "Rr", "Rt", "x"]
 suspended_tags = "s,ts,S,tS,T,tT,Rs,Rts,RS,RtS,RT,RtT".split(",")
 error_tags = "Eqw,Ehqw,EhRqw".split(",")
 deleted_tags = "dr,dt,dRr,dRt,ds,dS,dT,dRs,dRS,dRT".split(",")
@@ -321,13 +326,13 @@ def get_qstat(username: str) -> pd.DataFrame:
 
 def get_usage() -> DataFrame:
 
-    stdout, _ = run("qstat -u \*")  # noqa: W605
+    stdout, _ = run("qstat -u \\*")  # noqa: W605
     pdf = parse_qstat(stdout)
 
     # filter to running
     pdf = pdf[pdf.state.isin(running_tags)]
 
-    total_in_use = pdf["slots"].sum()
+    # total_in_use = pdf["slots"].sum()
 
     counts = pdf.groupby(["user"])["slots"].agg("sum")
     counts = counts.sort_values()  # type: ignore
@@ -337,19 +342,101 @@ def get_usage() -> DataFrame:
     return counts
 
 
-if __name__ == "__main__":
+def wait_for_jobs(jobs: list[str], respiratory: int = 60, include_status=True):
+    """ """
 
-    import argparse
+    logger.info(f"Waiting for {len(jobs)} job(s) on UGE...")
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-j", "--job-id", action="store", type=str)
-    parser.add_argument("-u", "--user", action="store", type=str, default=os.environ.get("USER"))
-    parser.add_argument("--usage", action="store_true")
-    args = parser.parse_args()
+    start_time = time.time()
 
-    if args.usage:
-        print_usage()
-        sys.exit()
+    while len(jobs):
 
-    job_id = args.job_id
-    follow_progress(username=args.user, job_id=job_id)
+        logger.info(
+            f"... and breathe for {respiratory} sec, still waiting for {len(jobs)} job(s) to finish..."
+        )
+
+        time.sleep(respiratory)
+
+        for job_id in jobs:
+
+            if _uge_is_job_done(job_id):
+                yield job_id
+                jobs.remove(job_id)
+
+    end_time = time.time()
+    diff_time = end_time - start_time
+    logger.info(f"All jobs finished and took {diff_time/60/60:.2f}h")
+
+
+def _uge_is_job_done(job_id: str) -> bool:
+
+    # still_waiting_states = ["q", "r", "qw", "dr", 'x', 't']
+    still_waiting_states = pending_tags + running_tags
+
+    status = get_status(job_id)
+
+    if status is None:
+        return True
+
+    state = status.get("job_state", "qw")
+    logger.debug(f"uge {job_id} is {state}")
+
+    if state not in still_waiting_states:
+        return True
+
+    return False
+
+
+def get_status(job_id: str | int) -> dict[str, str] | None:
+    """
+    Get status of SGE Job
+    job_state
+        q - queued
+        qw - queued wait ?
+        r - running
+        dr - deleting
+        dx - deleted
+    job_name
+    """
+
+    cmd = f"qstat -j {job_id}"
+    # TODO Check syntax for task-array
+
+    stdout, stderr = execute(cmd)
+
+    if stdout is None:
+        stdout = ""
+
+    if stderr is None:
+        stderr = ""
+
+    stderr = stderr.replace("\n", "")
+    stderr = stderr.strip().rstrip()
+
+    if stderr:
+        logger.debug(stderr)
+        return None
+
+    lines = stdout.split("\n")
+
+    status_ = dict()
+
+    for line in lines:
+
+        line_ = line.split(":")
+        if len(line_) < 2:
+            continue
+
+        print(line)
+
+        # TODO Is probably task_array related and needs are more general fix
+        # job_state             1:    r
+        key = line_[0]
+        key = key.replace("    1", "")
+        key = key.strip()
+
+        content = line_[1].strip()
+
+        status_[key] = content
+
+    return status_

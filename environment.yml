@@ -4,8 +4,10 @@ channels:
 - conda-forge
 dependencies:
 - python=3.11
-- pytest
-- pre-commit
-- pandas
-- numpy
+- jinja2
 - mypy
+- numpy
+- pandas
+- pre-commit
+- pytest
+- tdqm
