@@ -1,4 +1,3 @@
-import tempfile
 import copy
 import json
 import pickle
@@ -10,9 +9,11 @@ from typing import Any, Dict, Optional, Union
 
 FILENAMES = tempfile._get_candidate_names()
 
+
 def generate_name():
     """Generate a random name"""
     return next(FILENAMES)
+
 
 class WorkDir(tempfile.TemporaryDirectory):
     """Like TemporaryDirectory, with the possiblity of keeping log files for debug"""

@@ -170,6 +170,7 @@ UGE_KEYWORDS = [
     "HOSTNAME",
 ]
 
+
 def is_uge() -> bool:
     """Check if module is called from a UGE queue enviroment"""
 

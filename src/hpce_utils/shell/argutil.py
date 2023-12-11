@@ -1,5 +1,5 @@
-
 from typing import Any
+
 
 def parse_value(value: Any) -> str | None:
     """Parse values and stringify the options"""
@@ -44,5 +44,3 @@ def get_argument_string(options: dict) -> str:
         line.append(cmd)
 
     return " ".join(line)
-
-

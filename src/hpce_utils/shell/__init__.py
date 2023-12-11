@@ -2,6 +2,7 @@ import logging
 import os
 import shutil
 import subprocess
+from pathlib import Path
 from subprocess import TimeoutExpired
 
 _logger = logging.getLogger(__name__)
@@ -172,12 +173,11 @@ def directory_remove_trail(path: str) -> str:
     return path
 
 
-
-def get_environment(variable_names:list[str]) -> dict[str, str]:
+def get_environment(env_names: list[str]) -> dict[str, str]:
     """Get environ variables that matter"""
     environ = dict()
 
-    for var in variables_names:
+    for var in env_names:
         value = os.environ.get(var, None)
 
         if value:
@@ -185,7 +185,8 @@ def get_environment(variable_names:list[str]) -> dict[str, str]:
 
     return environ
 
-def which(cmd: Union[str, Path]) -> Optional[Path]:
+
+def which(cmd: str | Path) -> Path | None:
     """Check if command exists in enviroment"""
     path_ = shutil.which(cmd)
 

@@ -337,7 +337,6 @@ def get_usage() -> DataFrame:
     return counts
 
 
-
 if __name__ == "__main__":
 
     import argparse

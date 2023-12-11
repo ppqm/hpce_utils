@@ -1,4 +1,3 @@
-
 # pylint: disable=too-many-arguments,too-many-locals,dangerous-default-value
 def get_submit_script(
     cmd: str,
@@ -224,6 +223,3 @@ def uge_log_error(filename: Path, name: str = "uge") -> None:
         for line in f:
             line = line.strip()
             logger.error(f"{name} - {line}")
-
-
-

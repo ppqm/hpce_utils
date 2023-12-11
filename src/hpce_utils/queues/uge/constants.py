@@ -1,4 +1,3 @@
-
 UGE_TASK_ID = "$SGE_TASK_ID"
 
 QSUB = "qsub {filename}"

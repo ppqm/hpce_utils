@@ -2,14 +2,14 @@ import logging
 import os
 import subprocess
 import sys
+from functools import cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
-from functools import cache
 
-from hpc_env.shell import which
-
+from hpce_utils.shell import which
 
 _logger = logging.getLogger("lmod")
+
 
 @cache
 def get_lmod_executable():
@@ -18,19 +18,23 @@ def get_lmod_executable():
     exe = dir / "lmod" if dir is not None else None
 
     # TODO Raise exception if cannot find executable
+
     if exe is None:
         _logger.error(f"Could not find LMOD executable in environment")
+        return None
+
+    if not which(exe):
+        _logger.error(f"Could not find {exe} executable in environment")
+        return None
 
     return exe
 
 
 # pylint: disable=too-many-locals
-def module(command: str, arguments: str, cmd: Optional[Path] = get_lmod_executable()) -> Optional[str]:
+def module(
+    command: str, arguments: str, cmd: Optional[Path] = get_lmod_executable()
+) -> Optional[str]:
     """Use lmod to execute enviromental changes"""
-
-    # TODO Should raise exceptions, not asserts
-    assert cmd is not None, "Could not find LMOD_DIR in enviroment"
-    assert which(cmd), f"Could not find {cmd}"
 
     _logger.info(f"module {command} {arguments}")
 
@@ -128,7 +132,7 @@ def module(command: str, arguments: str, cmd: Optional[Path] = get_lmod_executab
 
 
 def purge() -> None:
-    """ Warning: This will break stuff """
+    """Warning: This will break stuff"""
     raise NotImplemented
     module("purge", "")
 

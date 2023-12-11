@@ -4,7 +4,7 @@ import shutil
 from pathlib import Path
 from typing import Optional, Union
 
-from hpc_env.queues import is_uge
+from hpce_utils import queues
 
 ENVIRON_CORES = [
     "OMP_NUM_THREADS",
@@ -39,6 +39,8 @@ def get_available_cores() -> int:
 
 def get_threads() -> Optional[int]:
     """Get number of threads from environmental variables"""
+
+    n_cores = None
 
     for name in ENVIRON_CORES:
         n_cores = os.environ.get(name, None)
@@ -88,11 +90,11 @@ def get_shm_path() -> Path | None:
     mem_path_old = "/dev/shm/"
 
     path = Path(mem_path)
-    if path.is_dir()
+    if path.is_dir():
         return path
 
     path = Path(mem_path_old)
-    if path.is_dir()
+    if path.is_dir():
         return path
 
     return None
