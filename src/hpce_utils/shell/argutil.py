@@ -1,16 +1,20 @@
 
-# Arg parsers
-def parse_value(value: Any) -> str:
+from typing import Any
+
+def parse_value(value: Any) -> str | None:
+    """Parse values and stringify the options"""
 
     if value is None:
         return None
 
+    # By default, if --arg is set, the bool is true.
     if isinstance(value, bool):
         return ""
 
     if isinstance(value, list):
-        values = [parse_value(x) for x in value]
-        return " ".join(values)
+        values: list[str | None] = [parse_value(x) for x in value if x is not None]
+        _values: list[str] = [x for x in values if x is not None]
+        return " ".join(_values)
 
     if isinstance(value, str):
         if " " in value:
@@ -21,6 +25,7 @@ def parse_value(value: Any) -> str:
 
 
 def get_argument_string(options: dict) -> str:
+    """Translate options to string commandline interface"""
 
     line = []
     for key, val in options.items():
