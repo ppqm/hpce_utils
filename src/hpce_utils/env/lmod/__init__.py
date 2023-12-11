@@ -20,7 +20,7 @@ def get_lmod_executable():
     # TODO Raise exception if cannot find executable
 
     if exe is None:
-        _logger.error(f"Could not find LMOD executable in environment")
+        _logger.error("Could not find LMOD executable in environment")
         return None
 
     if not which(exe):
@@ -39,6 +39,8 @@ def module(
     _logger.info(f"module {command} {arguments}")
 
     execution: Any = [cmd, "python", command, arguments]
+
+    _logger.debug(execution)
 
     with subprocess.Popen(
         execution,
@@ -133,7 +135,7 @@ def module(
 
 def purge() -> None:
     """Warning: This will break stuff"""
-    raise NotImplemented
+    raise NotImplementedError
     module("purge", "")
 
 
@@ -142,13 +144,13 @@ def load(module_name: str) -> None:
     module("load", module_name)
 
 
-def use(path: str) -> None:
+def use(path: str | Path) -> None:
     """Use path in MODULEPATH"""
-    module("use", path)
+    module("use", str(path))
 
 
-def get_modules(remove_hidden: bool = True) -> Dict[str, str]:
-    """Return all active LMOD modules"""
+def get_modules() -> dict[str, str]:
+    """Return all active LMOD modules. Hidden modules are ignored."""
 
     stderr = module("list", "")
 
