@@ -1,11 +1,11 @@
 import os
 import sys
+import pytest
 
-from hpc_env import lmod
+from hpce_utils.env import lmod
 
-# TODO Check if
-
-# TODO Create temp module in assets
+if lmod.get_lmod_executable()
+    pytest.skip("Could not find LMOD executable", allow_module_level=True)
 
 def test_use() -> None:
 

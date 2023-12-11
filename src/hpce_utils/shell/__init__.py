@@ -144,3 +144,54 @@ def source(bashfile):
         variables[key] = var
 
     return variables
+
+
+def directory_add_trail(path: str) -> str:
+    """ """
+
+    # Remove trailing spaces
+    path = path.strip()
+
+    if path == "":
+        return path
+
+    if not path.endswith(os.path.sep):
+        path += os.path.sep
+
+    return path
+
+
+def directory_remove_trail(path: str) -> str:
+
+    # Remove trailing spaces
+    path = path.strip()
+
+    if path.endswith(os.path.sep):
+        path = path[:-1]
+
+    return path
+
+
+
+def get_environment(variable_names:list[str]) -> dict[str, str]:
+    """Get environ variables that matter"""
+    environ = dict()
+
+    for var in variables_names:
+        value = os.environ.get(var, None)
+
+        if value:
+            environ[var] = value
+
+    return environ
+
+def which(cmd: Union[str, Path]) -> Optional[Path]:
+    """Check if command exists in enviroment"""
+    path_ = shutil.which(cmd)
+
+    if path_ is None:
+        return None
+
+    path = Path(path_)
+
+    return path

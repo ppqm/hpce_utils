@@ -319,7 +319,7 @@ def get_qstat(username: str) -> pd.DataFrame:
     return pdf_
 
 
-def print_usage():
+def get_usage() -> DataFrame:
 
     stdout, _ = run("qstat -u \*")  # noqa: W605
     pdf = parse_qstat(stdout)
@@ -332,8 +332,10 @@ def print_usage():
     counts = pdf.groupby(["user"])["slots"].agg("sum")
     counts = counts.sort_values()  # type: ignore
 
-    print(counts)
-    print(f"Total cores used: {total_in_use}")
+    # print(counts)
+    # print(f"Total cores used: {total_in_use}")
+    return counts
+
 
 
 if __name__ == "__main__":

@@ -170,6 +170,16 @@ UGE_KEYWORDS = [
     "HOSTNAME",
 ]
 
+def is_uge() -> bool:
+    """Check if module is called from a UGE queue enviroment"""
+
+    name = os.getenv("SGE_TASK_ID")
+
+    if name is None:
+        return False
+
+    return True
+
 
 def get_env() -> Dict[str, Optional[str]]:
     """

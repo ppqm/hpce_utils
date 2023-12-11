@@ -1,16 +1,20 @@
 
 conda=conda
 python=python
+pip=./env/bin/pip
 
 .PHONY: build check clean test
 
-module=hpc_env
+all: env dev-pip
 
 todo:
 	grep "# TODO" */*.py | sed -e 's/    //g' | sed -e 's/# TODO//'
 
 env:
 	${conda} env create -f environment.yml -p ./env
+
+dev-pip:
+	${pip} install -e .
 
 conda-install-build:
 	${conda} install conda-build -c conda-forge -y
