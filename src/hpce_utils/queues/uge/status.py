@@ -2,9 +2,8 @@ import datetime
 import logging
 import os
 import re
-import subprocess
 import time
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Union
 
 import numpy as np
 import pandas as pd  # type: ignore
@@ -269,23 +268,6 @@ def parse_qacctj(stdout: str):
     return output
 
 
-def run(cmd: str) -> Tuple[str, str]:
-
-    with subprocess.Popen(
-        cmd,
-        shell=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    ) as popen:
-
-        bstdout, bstderr = popen.communicate()
-
-        stdout: str = bstdout.decode("utf-8")
-        stderr: str = bstderr.decode("utf-8")
-
-    return stdout, stderr
-
-
 def follow_progress(username=os.environ.get("USER"), job_id=Optional[str]) -> None:
 
     qstat = get_qstat(username)
@@ -335,14 +317,14 @@ def follow_progress(username=os.environ.get("USER"), job_id=Optional[str]) -> No
 
 
 def get_qstatj(job_id: str) -> dict:
-    stdout, _ = run(f"qstat -j {job_id} | head -n 100")
+    stdout, _ = execute(f"qstat -j {job_id} | head -n 100")
     return parse_qstatj(stdout)
 
 
 def get_qstat(username: str) -> pd.DataFrame:
-    stdout, _ = run(f"qstat -u {username}")
+    stdout, _ = execute(f"qstat -u {username}")
 
-    if len(stdout) == 0:
+    if stdout is None or len(stdout) == 0:
         return pd.DataFrame({})
 
     pdf = parse_qstat(stdout)
@@ -366,7 +348,7 @@ def get_qacctj(job_id: str) -> pd.DataFrame:
 
 def get_usage() -> DataFrame:
 
-    stdout, _ = run("qstat -u \\*")  # noqa: W605
+    stdout, _ = execute("qstat -u \\*")  # noqa: W605
     pdf = parse_qstat(stdout)
 
     # filter to running
@@ -478,10 +460,3 @@ def get_status(job_id: str | int) -> dict[str, str] | None:
         status_[key] = content
 
     return status_
-
-
-if __name__ == "__main__":
-    pdf = get_qacctj("15627687")
-    print(pdf)
-
-    print(pdf["exit_status"])
