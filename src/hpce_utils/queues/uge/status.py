@@ -244,6 +244,31 @@ def parse_taskarray(pdf) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def parse_qacctj(stdout: str):
+
+    output: list[dict[str, str]] = [dict()]
+
+    _stdout = stdout.split("\n")
+
+    for line in _stdout:
+
+        if "===========" in line:
+            if len(output[-1]) > 1:
+                output += [dict()]
+            continue
+
+        # Format: pe_taskid     NONE
+        key = line[0:13].strip()
+        value = line[13:].strip()
+
+        if len(key) == 0:
+            continue
+
+        output[-1][key] = value
+
+    return output
+
+
 def run(cmd: str) -> Tuple[str, str]:
 
     with subprocess.Popen(
@@ -265,6 +290,7 @@ def follow_progress(username=os.environ.get("USER"), job_id=Optional[str]) -> No
 
     qstat = get_qstat(username)
 
+    # TODO No print statements
     if len(qstat) == 0:
         print(f"No jobs for {username}")
         return
@@ -322,6 +348,20 @@ def get_qstat(username: str) -> pd.DataFrame:
     pdf = parse_qstat(stdout)
     pdf_ = parse_taskarray(pdf)
     return pdf_
+
+
+def get_qacctj(job_id: str) -> pd.DataFrame:
+
+    stdout, _ = execute(f"qacct -j {job_id}")
+
+    if stdout is None or len(stdout) == 0:
+        return pd.DataFrame({})
+
+    output = parse_qacctj(stdout)
+
+    pdf = pd.DataFrame(output)
+
+    return pdf
 
 
 def get_usage() -> DataFrame:
@@ -427,8 +467,6 @@ def get_status(job_id: str | int) -> dict[str, str] | None:
         if len(line_) < 2:
             continue
 
-        print(line)
-
         # TODO Is probably task_array related and needs are more general fix
         # job_state             1:    r
         key = line_[0]
@@ -440,3 +478,10 @@ def get_status(job_id: str | int) -> dict[str, str] | None:
         status_[key] = content
 
     return status_
+
+
+if __name__ == "__main__":
+    pdf = get_qacctj("15627687")
+    print(pdf)
+
+    print(pdf["exit_status"])
