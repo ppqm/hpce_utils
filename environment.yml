@@ -8,6 +8,8 @@ dependencies:
 - mypy
 - numpy
 - pandas
+- pip
 - pre-commit
 - pytest
-- tdqm
+- pip:
+  - tdqm

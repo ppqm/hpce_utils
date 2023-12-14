@@ -11,7 +11,7 @@ todo:
 	grep "# TODO" */*.py | sed -e 's/    //g' | sed -e 's/# TODO//'
 
 env:
-	${conda} env create -f environment.yml -p ./env
+	mamba env create -f environment.yml -p ./env --quiet
 
 dev-pip:
 	${pip} install -e .
@@ -38,3 +38,6 @@ test-unit:
 
 clean:
 	rm -r build *.pyc __pycache__ _tmp_* *.egg-info
+
+clean_env:
+	rm -fr ./env
