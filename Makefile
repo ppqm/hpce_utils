@@ -5,7 +5,7 @@ pip=./env/bin/pip
 
 .PHONY: build check clean test
 
-all: env dev-pip setup-pre-commit
+all: env dev-pip
 
 todo:
 	grep "# TODO" */*.py | sed -e 's/    //g' | sed -e 's/# TODO//'
