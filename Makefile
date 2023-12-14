@@ -22,10 +22,10 @@ conda-install-build:
 setup-pre-commit:
 	${python} -m pre_commit install
 
-check: test pre-commit
-
 pre-commit-all:
 	${python} -m pre_commit run --all-files
+
+format: pre-commit-all
 
 test: test-unit
 
