@@ -3,12 +3,42 @@ from pathlib import Path
 
 from jinja2 import Template
 
-from hpce_utils.queues.uge import constants
+from hpce_utils.files import generate_name
+from hpce_utils.managers.uge import constants
 from hpce_utils.shell import execute
 
 DEFAULT_LOG_DIR = "./ugelogs/"
 TEMPLATE_TASKARRAY = Path(__file__).parent / "templates" / "submit-task-array.jinja"
 logger = logging.getLogger(__name__)
+
+
+def generate_command(sync=False, export=False)->str:
+    """ Generate UGE/SGE submit command with approriate flags
+
+    export:
+       Available for qsub, qsh, qrsh, qlogin and qalter.
+       Specifies that all environment variables active within the qsub utility
+       be exported to the context  of  the job.
+
+    sync:
+       Available for qsub.
+       wait for the job to complete before exiting. If the job completes
+       successfully, qsub's exit code will be that of the completed job.
+
+    """
+
+    qrsh = constants.command_submit
+
+    cmd = [qrsh]
+
+    if sync:
+        cmd.append(constants.flag_sync)
+
+    if export:
+        cmd.append(constants.flag_environment_export)
+
+    return " ".join(cmd)
+
 
 
 # pylint: disable=too-many-arguments,too-many-locals,dangerous-default-value
@@ -18,10 +48,9 @@ def generate_taskarray_script(
     cwd: Path | None = None,
     environ: dict[str, str] = {},
     hours: int = 7,
+    mins: int | None = None,
     log_dir: Path | str | None = DEFAULT_LOG_DIR,
     mem: int = 4,
-    module_load: list[str] = [],
-    module_use: list[str] = [],
     name: str = "UGEJob",
     task_concurrent: int = 100,
     task_start: int = 1,
@@ -33,7 +62,20 @@ def generate_taskarray_script(
       - To set core restrictive env variables
     """
 
+    if not isinstance(cores, int) and cores >= 1:
+        raise ValueError(
+            "Cannot submit with invalid cores set. Needs to be a integer greater than 0."
+        )
+
     kwargs = locals()
+
+    if not log_dir.exists():
+        log_dir.mkdir(parents=True)
+
+    if log_dir.is_dir():
+        log_dir = str(log_dir.resolve() / "_")[:-1]  # Added a trailing slash
+
+    kwargs["log_dir"] = log_dir
 
     with open(TEMPLATE_TASKARRAY) as file_:
         template = Template(file_.read())
@@ -44,15 +86,23 @@ def generate_taskarray_script(
 
 
 # pylint: disable=dangerous-default-value
-def submit_job(
+def submit_script(
     submit_script: str,
     scr: str | Path | None = None,
-    filename: str = "tmp_uge.sh",
+    filename: str | None = None,
     cmd: str = constants.command_submit,
     cmd_options: dict[str, str] = {},
     dry: bool = False,
-) -> str | None:
-    """Submit script and return UGE Job ID"""
+) -> tuple[str | None, Path | None]:
+    """Submit script and return UGE Job ID
+
+    return:
+        job_id
+        script path
+    """
+
+    if filename is None:
+        filename = f"tmp_uge.{generate_name()}.sh"
 
     if scr is None:
         scr = "./"
@@ -65,7 +115,8 @@ def submit_job(
 
     logger.debug(f"Writing {filename} for UGE on {scr}")
 
-    # TODO Should be random name to avoid raise-condition
+    # TODO Needs some re-checks
+    cmd = f"{cmd} {{filename}}"
     cmd = cmd.format(filename=filename, **cmd_options)
     logger.debug(cmd)
     logger.debug(scr)
@@ -74,18 +125,18 @@ def submit_job(
         logger.info("Dry submission of qsub command")
         logger.info(f"cmd={cmd}")
         logger.info(f"scr={scr}")
-        return None
+        return None, scr / filename
 
     stdout, stderr = execute(cmd, cwd=scr)
 
     if stderr:
         for line in stderr.split("\n"):
             logger.error(line)
-        return None
+        return None, scr / filename
 
     if not stdout:
         logger.error("Unable to fetch qsub job id from stdout")
-        return None
+        return None, scr / filename
 
     # Successful submission
     # find id
@@ -96,41 +147,46 @@ def submit_job(
     uge_id = uge_id.split(".")
     uge_id = uge_id[0]
 
-    return uge_id
+    return uge_id, scr / filename
 
 
-# def delete_job(job_id: Union[str, int]) -> None:
+def delete_job(job_id: str | int) -> None:
 
-#     cmd = f"qdel {job_id}"
-#     logger.debug(cmd)
+    cmd = f"qdel {job_id}"
+    logger.debug(cmd)
 
-#     stdout, stderr = execute(cmd)
-#     stdout = stdout.strip()
-#     stderr = stderr.strip()
+    stdout, stderr = execute(cmd)
+    stdout = stdout.strip()
+    stderr = stderr.strip()
 
-#     for line in stderr.split("\n"):
-#         logger.error(line)
+    for line in stderr.split("\n"):
+        logger.error(line)
 
-#     for line in stdout.split("\n"):
-#         logger.error(line)
+    for line in stdout.split("\n"):
+        logger.error(line)
 
 
-def parse_logfiles(log_path: Path, job_id: str, ignore_stdout=True) -> tuple[list[str], list[str]]:
+def read_logfiles(
+    log_path: Path, job_id: str, ignore_stdout=True
+) -> tuple[dict[Path, list[str]], dict[Path, list[str]]]:
+    """Read logfiles produced by UGE task array. Ignore empty log files"""
     logger.debug(f"Looking for finished log files in {log_path}")
-    stderr_log_filenames = list(log_path.glob(f"*.e{job_id}*"))
-    print(stderr_log_filenames)
-    stderr = []
+    stderr_log_filenames = log_path.glob(f"*.e{job_id}*")
+    stderr = dict()
     for filename in stderr_log_filenames:
-        stderr += parse_logfile(filename)
+        if filename.stat().st_size == 0:
+            continue
+        stderr[filename] = parse_logfile(filename)
 
     if ignore_stdout:
-        return [], stderr
+        return dict(), stderr
 
-    stdout_log_filenames = list(log_path.glob(f"*.o{job_id}*"))
-    print(stdout_log_filenames)
-    stdout = []
+    stdout_log_filenames = log_path.glob(f"*.o{job_id}*")
+    stdout = dict()
     for filename in stdout_log_filenames:
-        stdout += parse_logfile(filename)
+        if filename.stat().st_size == 0:
+            continue
+        stdout[filename] = parse_logfile(filename)
 
     return stdout, stderr
 
@@ -142,10 +198,10 @@ def parse_logfile(filename: Path):
     return lines
 
 
-# def uge_log_error(filename: Path, name: str = "uge") -> None:
+# def uge_log_error(filename: Path, name: str = "uge", logger=_logger) -> None:
 
 #     if not filename.exists():
-#         _logger.error(f"could not read {filename}")
+#         logger.error(f"could not read {filename}")
 #         return
 
 #     with open(filename, "r") as f:

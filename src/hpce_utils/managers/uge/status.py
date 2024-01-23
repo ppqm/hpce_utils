@@ -3,7 +3,7 @@ import logging
 import os
 import re
 import time
-from typing import List, Optional, Union
+from typing import List, Union
 
 import numpy as np
 import pandas as pd  # type: ignore
@@ -76,7 +76,6 @@ class TaskarrayProgress:
         self.init_bar(job_info, job_status)
 
     def init_bar(self, job_info: dict, job_status: dict) -> None:
-
         job_id = job_info["job_number"]
         # job_name = job_info["job_name"]
         start_time = job_info["submission_time"]
@@ -109,7 +108,6 @@ class TaskarrayProgress:
         self.update(job_status)
 
     def update(self, status: dict) -> None:
-
         n_running = status.get("running", 0)
         n_pending = status.get("pending", 0)
         n_error = status.get("error", 0)
@@ -126,12 +124,21 @@ class TaskarrayProgress:
         self.pbar.n = n_finished
         self.pbar.refresh()
 
+    def finish(self) -> None:
+        n_total = self.n_total
+        self.pbar.set_postfix({})
+        self.pbar.set_description(f"{self.title} (0)", refresh=False)
+        self.pbar.n = n_total
+        self.pbar.refresh()
+
+    def is_finished(self) -> bool:
+        return self.pbar.n >= self.n_total
+
     def close(self):
         self.pbar.close()
 
 
 def parse_qstatj(stdout) -> dict:
-
     out = dict()
     lines = stdout.split("\n")
 
@@ -148,7 +155,6 @@ def parse_qstatj(stdout) -> dict:
 
 
 def parse_qstat(stdout) -> pd.DataFrame:
-
     stdout = stdout.strip()
     lines = stdout.split("\n")
 
@@ -163,7 +169,6 @@ def parse_qstat(stdout) -> pd.DataFrame:
         header_indicies.append(idx)
 
     def split_qstat_line(line):
-
         idx = 0
 
         for ind in header_indicies:
@@ -173,7 +178,6 @@ def parse_qstat(stdout) -> pd.DataFrame:
         yield line[idx:]
 
     for line in lines[2:]:
-
         if not line.strip():
             continue
 
@@ -190,7 +194,6 @@ def parse_qstat(stdout) -> pd.DataFrame:
 
 
 def parse_taskarray(pdf) -> pd.DataFrame:
-
     col_id = "job-ID"
     col_state = "state"
     col_array = "ja-task-ID"
@@ -199,7 +202,6 @@ def parse_taskarray(pdf) -> pd.DataFrame:
     job_ids = pdf[col_id].unique()
 
     def _parse(line):
-
         count = 0
 
         lines = line.split(",")
@@ -216,12 +218,6 @@ def parse_taskarray(pdf) -> pd.DataFrame:
     rows = []
 
     for job_id in job_ids:
-
-        # TODO Find all unique states
-        # - running
-        # - pending
-        # - error
-
         jobs = pdf[pdf[col_id] == job_id]
 
         pending_jobs = jobs[jobs[col_state].isin(pending_tags)]
@@ -236,7 +232,12 @@ def parse_taskarray(pdf) -> pd.DataFrame:
         n_pending = pending_count.values.sum()
         n_error = error_count.values.sum()
 
-        row = {"job": job_id, "running": n_running, "pending": n_pending, "error": n_error}
+        row = {
+            "job": job_id,
+            "running": n_running,
+            "pending": n_pending,
+            "error": n_error,
+        }
 
         rows.append(row)
 
@@ -244,13 +245,11 @@ def parse_taskarray(pdf) -> pd.DataFrame:
 
 
 def parse_qacctj(stdout: str):
-
     output: list[dict[str, str]] = [dict()]
 
     _stdout = stdout.split("\n")
 
     for line in _stdout:
-
         if "===========" in line:
             if len(output[-1]) > 1:
                 output += [dict()]
@@ -268,60 +267,104 @@ def parse_qacctj(stdout: str):
     return output
 
 
-def follow_progress(username=os.environ.get("USER"), job_id=Optional[str]) -> None:
+def follow_progress(
+    username=None,
+    job_ids: list[int | str] | None = None,
+    update_interval: int = 5,
+    exit_after: int | None = None,
+) -> None:
+    """Follow UGE jobs for $USER. All jobs or subset of job IDs.
+
+    Current implementation only supports task-arrays.
+    """
+
+    if username is None:
+        username = os.environ.get("USER", None)
+
+    if username is None:
+        raise ValueError("Unable to get USER env var")
 
     qstat = get_qstat(username)
 
     # TODO No print statements
     if len(qstat) == 0:
-        print(f"No jobs for {username}")
+        logger.error(f"No jobs for {username}")
         return
 
     job_ids: Union[List, np.ndarray]
 
-    if job_id is None:
+    if job_ids is None:
         job_ids = qstat["job"].unique()
-    else:
-        job_ids = [job_id]
 
     progresses = []
-    i = 0
 
-    for job_id in job_ids:
-
+    for i, job_id in enumerate(job_ids):
         job_info = get_qstatj(job_id)
         if KEY_TASKARRAY not in job_info:
             continue
 
         progress = TaskarrayProgress(qstat, job_id, job_info=job_info, position=i)
         progresses.append(progress)
-        #
-        i += 1
 
     # TODO Get status if jobs are finished or deleted
     # Then remove progressbars and return
 
-    for _ in range(5):
-        time.sleep(5)
+    # TODO While job_ids, then remove when not there anymore
 
+    iterations = 0
+    while True:
+        iterations += 1
+
+        if exit_after is not None and iterations > exit_after:
+            break
+
+        if len(progresses) == 0:
+            break
+
+        if all([bar.is_finished() for bar in progresses]):
+            print("all finished")
+            break
+
+        time.sleep(update_interval)
         qstat = get_qstat(username)
 
+        if len(qstat) == 0:
+            for _, array_bar in enumerate(progresses):
+                array_bar.finish()
+            break
+
         # While jobs are not done
-        for _, array_bar in enumerate(progresses):
+        finished = []
+        for i, array_bar in enumerate(progresses):
+
+            if array_bar.is_finished():
+                continue
 
             # Get and update tatus
-            job_status = dict(qstat[qstat["job"] == array_bar.job_id].iloc[0])
+            job_info = qstat[qstat["job"] == array_bar.job_id]
+
+            if len(job_info) == 0:
+                array_bar.finish()
+                finished.append(i)
+                continue
+
+            job_status = dict(job_info.iloc[0])
             array_bar.update(job_status)
+
+    for bar in progresses:
+        bar.close()
 
     return
 
 
 def get_qstatj(job_id: str) -> dict:
+    """Get job information"""
     stdout, _ = execute(f"qstat -j {job_id} | head -n 100")
     return parse_qstatj(stdout)
 
 
 def get_qstat(username: str) -> pd.DataFrame:
+    """Get job information for user"""
     stdout, _ = execute(f"qstat -u {username}")
 
     if stdout is None or len(stdout) == 0:
@@ -332,7 +375,8 @@ def get_qstat(username: str) -> pd.DataFrame:
     return pdf_
 
 
-def get_qacctj(job_id: str) -> pd.DataFrame:
+def get_qacctj(job_id: str | int) -> pd.DataFrame:
+    """Get detailed job information"""
 
     stdout, _ = execute(f"qacct -j {job_id}")
 
@@ -346,7 +390,8 @@ def get_qacctj(job_id: str) -> pd.DataFrame:
     return pdf
 
 
-def get_usage() -> DataFrame:
+def get_cluster_usage() -> DataFrame:
+    """Get cluster usage information, grouped by users"""
 
     stdout, _ = execute("qstat -u \\*")  # noqa: W605
     pdf = parse_qstat(stdout)
@@ -372,7 +417,6 @@ def wait_for_jobs(jobs: list[str], respiratory: int = 60, include_status=True):
     start_time = time.time()
 
     while len(jobs):
-
         logger.info(
             f"... and breathe for {respiratory} sec, still waiting for {len(jobs)} job(s) to finish..."
         )
@@ -380,7 +424,6 @@ def wait_for_jobs(jobs: list[str], respiratory: int = 60, include_status=True):
         time.sleep(respiratory)
 
         for job_id in jobs:
-
             if _uge_is_job_done(job_id):
                 yield job_id
                 jobs.remove(job_id)
@@ -391,8 +434,6 @@ def wait_for_jobs(jobs: list[str], respiratory: int = 60, include_status=True):
 
 
 def _uge_is_job_done(job_id: str) -> bool:
-
-    # still_waiting_states = ["q", "r", "qw", "dr", 'x', 't']
     still_waiting_states = pending_tags + running_tags
 
     status = get_status(job_id)
@@ -444,7 +485,6 @@ def get_status(job_id: str | int) -> dict[str, str] | None:
     status_ = dict()
 
     for line in lines:
-
         line_ = line.split(":")
         if len(line_) < 2:
             continue

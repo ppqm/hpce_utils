@@ -10,7 +10,7 @@ from typing import Any, Dict, Optional, Union
 FILENAMES = tempfile._get_candidate_names()
 
 
-def generate_name():
+def generate_name()->str:
     """Generate a random name"""
     return next(FILENAMES)
 

@@ -121,7 +121,7 @@ import os
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from hpce_utils.queues.uge import constants
+from hpce_utils.managers.uge import constants, status, submitting
 from hpce_utils.shell import which
 
 _logger = logging.getLogger(__name__)

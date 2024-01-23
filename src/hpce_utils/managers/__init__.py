@@ -1,4 +1,4 @@
-from hpce_utils.queues import slurm, uge
+from hpce_utils.managers import slurm, uge
 
 
 def get_cores() -> int | None:
