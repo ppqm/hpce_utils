@@ -3,9 +3,7 @@ import logging
 import os
 import re
 import time
-from typing import List, Union
 
-import numpy as np
 import pandas as pd  # type: ignore
 from pandas import DataFrame  # type: ignore
 from tqdm import tqdm  # type: ignore
@@ -291,19 +289,17 @@ def follow_progress(
         logger.error(f"No jobs for {username}")
         return
 
-    job_ids: Union[List, np.ndarray]
-
     if job_ids is None:
         job_ids = qstat["job"].unique()
 
     progresses = []
 
     for i, job_id in enumerate(job_ids):
-        job_info = get_qstatj(job_id)
-        if KEY_TASKARRAY not in job_info:
+        job_qstatj = get_qstatj(job_id)
+        if KEY_TASKARRAY not in job_qstatj:
             continue
 
-        progress = TaskarrayProgress(qstat, job_id, job_info=job_info, position=i)
+        progress = TaskarrayProgress(qstat, job_id, job_info=job_qstatj, position=i)
         progresses.append(progress)
 
     # TODO Get status if jobs are finished or deleted
@@ -341,7 +337,7 @@ def follow_progress(
                 continue
 
             # Get and update tatus
-            job_info = qstat[qstat["job"] == array_bar.job_id]
+            job_info: DataFrame = qstat[qstat["job"] == array_bar.job_id]
 
             if len(job_info) == 0:
                 array_bar.finish()
@@ -357,7 +353,7 @@ def follow_progress(
     return
 
 
-def get_qstatj(job_id: str) -> dict:
+def get_qstatj(job_id: str) -> dict[str, str]:
     """Get job information"""
     stdout, _ = execute(f"qstat -j {job_id} | head -n 100")
     return parse_qstatj(stdout)

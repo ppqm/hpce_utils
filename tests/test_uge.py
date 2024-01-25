@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from hpce_utils.queues import uge
-from hpce_utils.queues.uge import status, submitting
-from hpce_utils.queues.uge.constants import UGE_TASK_ID
+from hpce_utils.managers import uge
+from hpce_utils.managers.uge import status, submitting
+from hpce_utils.managers.uge.constants import UGE_TASK_ID
 
 if not uge.has_uge():
     pytest.skip("Could not find UGE executable", allow_module_level=True)
@@ -32,7 +32,7 @@ def test_taskarray(tmp_path):
         cores=1,
         task_stop=2,
         task_concurrent=1,
-        log_dir=log_dir,
+        log_dir=Path(log_dir),
     )
     print(script)
     assert command in script
@@ -43,7 +43,7 @@ def test_taskarray(tmp_path):
         scr=tmp_path,
         # dry=True,
     )
-    job_id = submitting.submit_job(script, **submit_options)
+    job_id, _ = submitting.submit_script(script, **submit_options)
     print(job_id)
     assert job_id is not None
 
@@ -54,7 +54,7 @@ def test_taskarray(tmp_path):
         finished_job_id = finished_job_id
 
     assert finished_job_id is not None
-    stdout, stderr = submitting.parse_logfiles(
+    stdout, stderr = submitting.read_logfiles(
         tmp_path / log_dir, finished_job_id, ignore_stdout=False
     )
 
@@ -65,7 +65,7 @@ def test_taskarray(tmp_path):
     assert len(stdout) == 2
 
     # Parse output
-    for line in stdout:
+    for _, line in stdout.items():
         assert success_string in line
 
 
@@ -99,14 +99,14 @@ def test_failed_job(tmp_path: Path):
         cores=1,
         task_stop=n_tasks,
         task_concurrent=1,
-        log_dir=log_dir,
+        log_dir=Path(log_dir),
     )
     print(script)
     assert command in script
 
     # Submit script
     print("scratch:", tmp_path)
-    job_id = submitting.submit_job(
+    job_id, _ = submitting.submit_script(
         script,
         scr=tmp_path,
         # dry=True,
@@ -134,7 +134,7 @@ def test_failed_job(tmp_path: Path):
     assert min(pdf_report["exit_status"]) == 0, "Exit code mismatch"
 
     # Get the log files
-    stdout, stderr = submitting.parse_logfiles(tmp_path / log_dir, job_id, ignore_stdout=False)
+    stdout, stderr = submitting.read_logfiles(tmp_path / log_dir, job_id, ignore_stdout=False)
     print("stdout:", stdout)
     print("stderr:", stderr)
     assert len(stderr) == 1

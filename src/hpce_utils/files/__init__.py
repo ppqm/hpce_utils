@@ -7,10 +7,10 @@ from io import StringIO
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
-FILENAMES = tempfile._get_candidate_names()
+FILENAMES = tempfile._get_candidate_names()  # type: ignore
 
 
-def generate_name()->str:
+def generate_name() -> str:
     """Generate a random name"""
     return next(FILENAMES)
 

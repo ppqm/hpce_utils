@@ -74,7 +74,7 @@ def set_threads(n_cores: int) -> None:
     n_cores_ = str(n_cores)
 
     for name in ENVIRON_CORES:
-        os.environ.set(name, n_cores_)
+        os.environ[name] = n_cores_
 
 
 def get_shm_path() -> Path | None:

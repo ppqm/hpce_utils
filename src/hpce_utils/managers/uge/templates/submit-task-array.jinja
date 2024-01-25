@@ -10,7 +10,9 @@
 #$ -o {{ log_dir | default("./log", true) }}
 #$ -e {{ log_dir | default("./log", true) }}
 
-{% if cwd %}cd {{ cwd }}\n\n{% endif %}
-{% for key, value in environ.items() %}export {{ key }}={{ value }}\n{% endfor %}
+{% if cwd %}cd {{ cwd }}
+{% endif %}
+{% for key, value in environ.items() %}export {{ key }}={{ value }}
+{% endfor %}
 
 {{ cmd }}

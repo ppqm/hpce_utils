@@ -7,13 +7,13 @@ from hpce_utils.files import generate_name
 from hpce_utils.managers.uge import constants
 from hpce_utils.shell import execute
 
-DEFAULT_LOG_DIR = "./ugelogs/"
+DEFAULT_LOG_DIR = Path("./ugelogs/")
 TEMPLATE_TASKARRAY = Path(__file__).parent / "templates" / "submit-task-array.jinja"
 logger = logging.getLogger(__name__)
 
 
-def generate_command(sync=False, export=False)->str:
-    """ Generate UGE/SGE submit command with approriate flags
+def generate_command(sync: bool = False, export: bool = False) -> str:
+    """Generate UGE/SGE submit command with approriate flags
 
     export:
        Available for qsub, qsh, qrsh, qlogin and qalter.
@@ -40,7 +40,6 @@ def generate_command(sync=False, export=False)->str:
     return " ".join(cmd)
 
 
-
 # pylint: disable=too-many-arguments,too-many-locals,dangerous-default-value
 def generate_taskarray_script(
     cmd: str,
@@ -49,7 +48,7 @@ def generate_taskarray_script(
     environ: dict[str, str] = {},
     hours: int = 7,
     mins: int | None = None,
-    log_dir: Path | str | None = DEFAULT_LOG_DIR,
+    log_dir: Path | None = DEFAULT_LOG_DIR,
     mem: int = 4,
     name: str = "UGEJob",
     task_concurrent: int = 100,
@@ -69,13 +68,12 @@ def generate_taskarray_script(
 
     kwargs = locals()
 
-    if not log_dir.exists():
+    if log_dir is not None and not log_dir.exists():
         log_dir.mkdir(parents=True)
 
-    if log_dir.is_dir():
-        log_dir = str(log_dir.resolve() / "_")[:-1]  # Added a trailing slash
-
-    kwargs["log_dir"] = log_dir
+    if log_dir is not None and log_dir.is_dir():
+        _log_dir = str(log_dir.resolve() / "_")[:-1]  # Added a trailing slash
+        kwargs["log_dir"] = _log_dir
 
     with open(TEMPLATE_TASKARRAY) as file_:
         template = Template(file_.read())
