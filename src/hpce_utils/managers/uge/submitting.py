@@ -55,6 +55,7 @@ def generate_taskarray_script(
     task_start: int = 1,
     task_step: int = 1,
     task_stop: int | None = None,
+    generate_dirs: bool = True,
 ) -> str:
     """
     Remember:
@@ -68,12 +69,13 @@ def generate_taskarray_script(
 
     kwargs = locals()
 
-    if log_dir is not None and not log_dir.exists():
-        log_dir.mkdir(parents=True)
+    if generate_dirs:
+        if log_dir is not None and not log_dir.exists():
+            log_dir.mkdir(parents=True)
 
-    if log_dir is not None and log_dir.is_dir():
-        _log_dir = str(log_dir.resolve() / "_")[:-1]  # Added a trailing slash
-        kwargs["log_dir"] = _log_dir
+        if log_dir is not None and log_dir.is_dir():
+            _log_dir = str(log_dir.resolve() / "_")[:-1]  # Added a trailing slash
+            kwargs["log_dir"] = _log_dir
 
     with open(TEMPLATE_TASKARRAY) as file_:
         template = Template(file_.read())
@@ -108,6 +110,8 @@ def submit_script(
     scr = Path(scr)
     scr.mkdir(parents=True, exist_ok=True)
 
+    assert scr.is_dir()
+
     with open(scr / filename, "w") as f:
         f.write(submit_script)
 
@@ -138,12 +142,24 @@ def submit_script(
 
     # Successful submission
     # find id
-    logger.info(stdout.strip().rstrip())
+    logger.info(f"submit stdout: {stdout.strip().rstrip()}")
 
+    #
     # Your job JOB_ID ("JOB_NAME") has been submitted
-    uge_id = stdout.split()[2]
+    uge_id = stdout.strip().rstrip().split("\n")[-1]
+    if "has been submitted" not in uge_id:
+        raise RuntimeError(f"Could not find UGE Job ID in: '{uge_id}'")
+    uge_id = uge_id.split()[2]
     uge_id = uge_id.split(".")
     uge_id = uge_id[0]
+
+    # Test format of job_id
+    try:
+        int(uge_id)
+    except ValueError:
+        raise ValueError("UGE Job ID is not correct format")
+
+    logger.info(f"got job_id: {uge_id}")
 
     return uge_id, scr / filename
 
@@ -189,30 +205,9 @@ def read_logfiles(
     return stdout, stderr
 
 
-def parse_logfile(filename: Path):
+def parse_logfile(filename: Path) -> list[str]:
+    """Read logfile, without line-breaks"""
     # TODO Maybe find exceptions and raise them?
     with open(filename, "r") as f:
-        lines = f.readlines()
+        lines = f.read().split("\n")
     return lines
-
-
-# def uge_log_error(filename: Path, name: str = "uge", logger=_logger) -> None:
-
-#     if not filename.exists():
-#         logger.error(f"could not read {filename}")
-#         return
-
-#     with open(filename, "r") as f:
-#         for line in f:
-#             line = line.strip().rstrip()
-#             # ignore empty lines
-#             if not line:
-#                 continue
-#             _logger.error(f"{name} - {line}")
-
-
-# def read_logfiles(log_path, job_id):
-#     """Check for errors in log files"""
-#     log_filenames = log_path.glob(f"*.e{job_id}*")
-#     for filename in log_filenames:
-#         uge_log_error(filename, name=str(job_id))

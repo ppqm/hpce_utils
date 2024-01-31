@@ -2,6 +2,7 @@
 conda=conda
 python=python
 pip=./env/bin/pip
+module=hpce_utils
 
 .PHONY: build check clean test
 
@@ -35,6 +36,11 @@ test-unit:
 # test-ipynb:
 # 	jupytext --output _tmp_script.py notebooks/example_demo.ipynb
 # 	${python} _tmp_script.py
+
+types:
+	@# Slow and will agressively put types (old format) in the code
+	echo python -m monkeytype run `which pytest` ./tests/
+	echo python -m monkeytype list-modules | grep ${module} | xargs -n1 monkeytype apply
 
 clean:
 	rm -r build *.pyc __pycache__ _tmp_* *.egg-info

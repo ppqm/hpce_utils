@@ -9,10 +9,7 @@
 #$ -tc {{ task_concurrent }}{% endif %}
 #$ -o {{ log_dir | default("./log", true) }}
 #$ -e {{ log_dir | default("./log", true) }}
-
 {% if cwd %}cd {{ cwd }}
-{% endif %}
-{% for key, value in environ.items() %}export {{ key }}={{ value }}
+{% endif %}{% for key, value in environ.items() %}export {{ key }}={{ value }}
 {% endfor %}
-
 {{ cmd }}

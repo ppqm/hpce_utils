@@ -13,13 +13,10 @@ from hpce_utils.shell import execute  # type: ignore
 logger = logging.getLogger(__name__)
 
 # tqdm default view
+# TODO Put this somewhere more general
 TQDM_OPTIONS = {
     "ncols": 95,
 }
-
-# if run from jupyter, print to stdout and not stderr
-# if env.is_notebook():
-#     TQDM_OPTIONS["file"] = sys.stdout
 
 """
 | **Category**  | **State**                                      | **SGE Letter Code** |
@@ -52,32 +49,35 @@ error_tags = "Eqw,Ehqw,EhRqw".split(",")
 deleted_tags = "dr,dt,dRr,dRt,ds,dS,dT,dRs,dRS,dRT".split(",")
 
 
-KEY_TASKARRAY = "job-array_tasks"
+COLUMN_JOB = "job"
+COLUMN_JOB_ID = "job_number"
+COLUMN_SUBMISSION_TIME = "submission_time"
+COLUMN_TASKARRAY = "job-array tasks"
 
 
 class TaskarrayProgress:
     def __init__(self, pdf, job_id, job_info=None, position=0) -> None:
         self.position = position
-        self.job_id = job_id
+        self.job_id = str(job_id)
 
         # Get info
 
         if job_info is None:
             job_info = get_qstatj(job_id)
 
-        if KEY_TASKARRAY not in job_info:
+        if COLUMN_TASKARRAY not in job_info:
             raise ValueError("Not array task")
 
         # Only about this job
-        job_status = dict(pdf[pdf["job"] == self.job_id].iloc[0])
-
+        _job_pdf = pdf[pdf[COLUMN_JOB] == self.job_id]
+        job_status = dict(_job_pdf.iloc[0])
         self.init_bar(job_info, job_status)
 
     def init_bar(self, job_info: dict, job_status: dict) -> None:
-        job_id = job_info["job_number"]
+        job_id = job_info[COLUMN_JOB_ID]
         # job_name = job_info["job_name"]
-        start_time = job_info["submission_time"]
-        array_info = job_info["job-array_tasks"]
+        start_time = job_info[COLUMN_SUBMISSION_TIME]
+        array_info = job_info[COLUMN_TASKARRAY]
 
         # Collect and parse submission time
         start_time = ".".join(start_time.split(".")[:-1])
@@ -106,6 +106,7 @@ class TaskarrayProgress:
         self.update(job_status)
 
     def update(self, status: dict) -> None:
+
         n_running = status.get("running", 0)
         n_pending = status.get("pending", 0)
         n_error = status.get("error", 0)
@@ -129,6 +130,14 @@ class TaskarrayProgress:
         self.pbar.n = n_total
         self.pbar.refresh()
 
+    def log_errors(self) -> None:
+
+        qstatj = get_qstatj(self.job_id)
+        errors = _get_errors_from_qstatj(qstatj)
+
+        for error in errors:
+            logger.error(f"uge {self.job_id}: {error.strip()}")
+
     def is_finished(self) -> bool:
         return self.pbar.n >= self.n_total
 
@@ -136,18 +145,57 @@ class TaskarrayProgress:
         self.pbar.close()
 
 
+def _get_qstatj_key(line: str) -> tuple[str | None, str]:
+    """Split column key and column value from qstat -j output"""
+
+    # format:
+    # start_time            2:    01/01/1970 01:00:00.000
+    # job-array tasks:            1-3:1
+    # error reason    1:          01/31/2024 17:05:39 [94281059:32991]: can't make directory
+
+    col_key_end = 28
+
+    # Does it have some pre-defined spaces
+    spaces = line[col_key_end - 3 : col_key_end].strip()
+    if len(spaces) > 0:
+        return None, line
+
+    if len(line) < col_key_end:
+        return None, line
+
+    key = line[:col_key_end]
+    value = line[col_key_end:]
+
+    # remove ":" colon
+    key = key.strip()[:-1]
+
+    if len(key) == 0:
+        return None, line
+
+    return key, value.strip()
+
+
 def parse_qstatj(stdout) -> dict:
+    """Parse the stdout of qstat -j into a dict"""
+
     out = dict()
     lines = stdout.split("\n")
 
+    _key = None
     for line in lines[1:]:
-        try:
-            key, value = line.split(":", 1)
-        except Exception:
-            continue
-        key = key.strip().replace(" ", "_")
-        value = value.strip()
-        out[key] = value
+
+        key, value = _get_qstatj_key(line)
+
+        if key is None:
+            key = _key
+            value = "\n" + value
+
+        _key = key
+
+        if key not in out:
+            out[key] = ""
+
+        out[key] += value
 
     return out
 
@@ -265,8 +313,15 @@ def parse_qacctj(stdout: str):
     return output
 
 
+def _get_errors_from_qstatj(qstatj: dict[str, str]) -> list[str]:
+    key1 = "error reason   "
+    error_keys = [key for key in qstatj.keys() if key1 in key]
+    errors = [qstatj[key] for key in error_keys]
+    return errors
+
+
 def follow_progress(
-    username=None,
+    username: str | None = None,
     job_ids: list[int | str] | None = None,
     update_interval: int = 5,
     exit_after: int | None = None,
@@ -284,26 +339,44 @@ def follow_progress(
 
     qstat = get_qstat(username)
 
-    # TODO No print statements
-    if len(qstat) == 0:
-        logger.error(f"No jobs for {username}")
+    if not len(qstat):
+        logger.warning(f"No jobs for {username}")
         return
 
+    # TODO Add check that job_id is even valid
     if job_ids is None:
         job_ids = qstat["job"].unique()
 
     progresses = []
 
     for i, job_id in enumerate(job_ids):
-        job_qstatj = get_qstatj(job_id)
-        if KEY_TASKARRAY not in job_qstatj:
+
+        qstatj = get_qstatj(job_id)
+
+        # Assert job_id in qstat
+        job = qstat.loc[qstat["job"] == str(job_id)]  # will return one result
+        job = job.iloc[0]
+
+        if job.running + job.pending == 0 and job.error > 0:
+            # crashed job
+            errors = _get_errors_from_qstatj(qstatj)
+            logger.error(f"UGE job {job_id} is NOT starting for the following reason(s):")
+            for error in errors:
+                logger.error(error)
+
             continue
 
-        progress = TaskarrayProgress(qstat, job_id, job_info=job_qstatj, position=i)
+        if COLUMN_TASKARRAY not in qstatj:
+            logger.info(f"Ignoring {job_id}, not a task-array")
+            continue
+
+        progress = TaskarrayProgress(qstat, job_id, job_info=qstatj, position=i)
         progresses.append(progress)
 
     # TODO Get status if jobs are finished or deleted
     # Then remove progressbars and return
+
+    # TODO Check if job-array has errors, use logger.error to print them out. Maybe with a unique()
 
     # TODO While job_ids, then remove when not there anymore
 
@@ -318,7 +391,10 @@ def follow_progress(
             break
 
         if all([bar.is_finished() for bar in progresses]):
-            print("all finished")
+
+            for bar in progresses:
+                bar.log_errors()
+
             break
 
         time.sleep(update_interval)
@@ -353,7 +429,7 @@ def follow_progress(
     return
 
 
-def get_qstatj(job_id: str) -> dict[str, str]:
+def get_qstatj(job_id: str | int) -> dict[str, str]:
     """Get job information"""
     stdout, _ = execute(f"qstat -j {job_id} | head -n 100")
     return parse_qstatj(stdout)
@@ -387,7 +463,10 @@ def get_qacctj(job_id: str | int) -> pd.DataFrame:
 
 
 def get_cluster_usage() -> DataFrame:
-    """Get cluster usage information, grouped by users"""
+    """Get cluster usage information, grouped by users
+
+    To get totla cores in use `pdf["slots"].sum()`
+    """
 
     stdout, _ = execute("qstat -u \\*")  # noqa: W605
     pdf = parse_qstat(stdout)
@@ -395,13 +474,9 @@ def get_cluster_usage() -> DataFrame:
     # filter to running
     pdf = pdf[pdf.state.isin(running_tags)]
 
-    # total_in_use = pdf["slots"].sum()
-
     counts = pdf.groupby(["user"])["slots"].agg("sum")
     counts = counts.sort_values()  # type: ignore
 
-    # print(counts)
-    # print(f"Total cores used: {total_in_use}")
     return counts
 
 
@@ -432,67 +507,15 @@ def wait_for_jobs(jobs: list[str], respiratory: int = 60, include_status=True):
 def _uge_is_job_done(job_id: str) -> bool:
     still_waiting_states = pending_tags + running_tags
 
-    status = get_status(job_id)
+    status_j = get_qstatj(job_id)
 
-    if status is None:
+    if not len(status_j):
         return True
 
-    state = status.get("job_state", "qw")
+    state = status_j.get("job_state", "qw")
     logger.debug(f"uge {job_id} is {state}")
 
     if state not in still_waiting_states:
         return True
 
     return False
-
-
-def get_status(job_id: str | int) -> dict[str, str] | None:
-    """
-    Get status of SGE Job
-    job_state
-        q - queued
-        qw - queued wait ?
-        r - running
-        dr - deleting
-        dx - deleted
-    job_name
-    """
-
-    cmd = f"qstat -j {job_id}"
-    # TODO Check syntax for task-array
-
-    stdout, stderr = execute(cmd)
-
-    if stdout is None:
-        stdout = ""
-
-    if stderr is None:
-        stderr = ""
-
-    stderr = stderr.replace("\n", "")
-    stderr = stderr.strip().rstrip()
-
-    if stderr:
-        logger.debug(stderr)
-        return None
-
-    lines = stdout.split("\n")
-
-    status_ = dict()
-
-    for line in lines:
-        line_ = line.split(":")
-        if len(line_) < 2:
-            continue
-
-        # TODO Is probably task_array related and needs are more general fix
-        # job_state             1:    r
-        key = line_[0]
-        key = key.replace("    1", "")
-        key = key.strip()
-
-        content = line_[1].strip()
-
-        status_[key] = content
-
-    return status_
