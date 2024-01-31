@@ -3,6 +3,7 @@ import logging
 import os
 import re
 import time
+from typing import Dict, Iterator, List
 
 import pandas as pd  # type: ignore
 from pandas import DataFrame  # type: ignore
@@ -56,7 +57,13 @@ COLUMN_TASKARRAY = "job-array tasks"
 
 
 class TaskarrayProgress:
-    def __init__(self, pdf, job_id, job_info=None, position=0) -> None:
+    def __init__(
+        self,
+        pdf: DataFrame,
+        job_id: str,
+        job_info: Dict[str, str] | None = None,
+        position: int = 0,
+    ) -> None:
         self.position = position
         self.job_id = str(job_id)
 
@@ -141,7 +148,7 @@ class TaskarrayProgress:
     def is_finished(self) -> bool:
         return self.pbar.n >= self.n_total
 
-    def close(self):
+    def close(self) -> None:
         self.pbar.close()
 
 
@@ -175,7 +182,7 @@ def _get_qstatj_key(line: str) -> tuple[str | None, str]:
     return key, value.strip()
 
 
-def parse_qstatj(stdout) -> dict:
+def parse_qstatj(stdout: str) -> dict:
     """Parse the stdout of qstat -j into a dict"""
 
     out = dict()
@@ -200,7 +207,7 @@ def parse_qstatj(stdout) -> dict:
     return out
 
 
-def parse_qstat(stdout) -> pd.DataFrame:
+def parse_qstat(stdout: str) -> pd.DataFrame:
     stdout = stdout.strip()
     lines = stdout.split("\n")
 
@@ -239,7 +246,7 @@ def parse_qstat(stdout) -> pd.DataFrame:
     return pdf
 
 
-def parse_taskarray(pdf) -> pd.DataFrame:
+def parse_taskarray(pdf: DataFrame) -> pd.DataFrame:
     col_id = "job-ID"
     col_state = "state"
     col_array = "ja-task-ID"
@@ -290,7 +297,7 @@ def parse_taskarray(pdf) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def parse_qacctj(stdout: str):
+def parse_qacctj(stdout: str) -> List[Dict[str, str]]:
     output: list[dict[str, str]] = [dict()]
 
     _stdout = stdout.split("\n")
@@ -480,7 +487,9 @@ def get_cluster_usage() -> DataFrame:
     return counts
 
 
-def wait_for_jobs(jobs: list[str], respiratory: int = 60, include_status=True):
+def wait_for_jobs(
+    jobs: list[str], respiratory: int = 60, include_status: bool = True
+) -> Iterator[str]:
     """ """
 
     logger.info(f"Waiting for {len(jobs)} job(s) on UGE...")

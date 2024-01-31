@@ -2,10 +2,11 @@ import logging
 import os
 import shutil
 import subprocess
-from pathlib import Path
+from pathlib import Path, PosixPath
 from subprocess import TimeoutExpired
+from typing import Optional, Tuple
 
-_logger = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def command_exists(cmd):
@@ -19,7 +20,7 @@ def command_exists(cmd):
     return True
 
 
-def switch_workdir(path):
+def switch_workdir(path: Path | None) -> bool:
     """Check if it makes sense to change directory"""
 
     if path is None:
@@ -39,7 +40,7 @@ def switch_workdir(path):
     return True
 
 
-def stream(cmd, cwd=None, shell=True):
+def stream(cmd: str, cwd: Path | None = None, shell: bool = True):
     """Execute command in directory, and stream stdout. Last yield is
     stderr
 
@@ -62,18 +63,20 @@ def stream(cmd, cwd=None, shell=True):
         cwd=cwd,
     )
 
-    for stdout_line in iter(popen.stdout.readline, ""):
+    for stdout_line in iter(popen.stdout.readline, ""):  # type: ignore
         yield stdout_line
 
     # Yield errors
-    stderr = popen.stderr.read()
-    popen.stdout.close()
+    stderr = popen.stderr.read()  # type: ignore
+    popen.stdout.close()  # type: ignore
     yield stderr
 
     return
 
 
-def execute(cmd, cwd=None, shell=True, timeout=None):
+def execute(
+    cmd: str, cwd: Path | None = None, shell: bool = True, timeout: None = None
+) -> Tuple[str, str]:
     """Execute command in directory, and return stdout and stderr
 
     :param cmd: The shell command
@@ -98,8 +101,9 @@ def execute(cmd, cwd=None, shell=True, timeout=None):
     try:
         stdout, stderr = process.communicate(timeout=timeout)
     except TimeoutExpired:
-        stdout = None
-        stderr = None
+        logger.warning("Shell execution timed out")
+        stdout = ""
+        stderr = ""
 
     return stdout, stderr
 
@@ -116,7 +120,7 @@ def source(bashfile):
     """
 
     cmd = f'env -i sh -c "source {bashfile} && env"'
-    stdout, stderr = execute(cmd)
+    stdout, _ = execute(cmd)
     lines = stdout.split("\n")
 
     variables = dict()

@@ -4,7 +4,7 @@ import subprocess
 import sys
 from functools import cache
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, List, Tuple
 
 from hpce_utils.shell import which
 
@@ -12,7 +12,7 @@ _logger = logging.getLogger("lmod")
 
 
 @cache
-def get_lmod_executable():
+def get_lmod_executable() -> Path | None:
     _dir = os.environ.get("LMOD_DIR", None)
     dir = Path(_dir) if _dir is not None else None
     exe = dir / "lmod" if dir is not None else None
@@ -31,9 +31,7 @@ def get_lmod_executable():
 
 
 # pylint: disable=too-many-locals
-def module(
-    command: str, arguments: str, cmd: Optional[Path] = get_lmod_executable()
-) -> Optional[str]:
+def module(command: str, arguments: str, cmd: Path | None = get_lmod_executable()) -> str | None:
     """Use lmod to execute enviromental changes"""
 
     _logger.info(f"module {command} {arguments}")

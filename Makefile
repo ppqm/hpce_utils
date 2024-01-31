@@ -39,8 +39,8 @@ test-unit:
 
 types:
 	@# Slow and will agressively put types (old format) in the code
-	echo python -m monkeytype run `which pytest` ./tests/
-	echo python -m monkeytype list-modules | grep ${module} | xargs -n1 monkeytype apply
+	python -m monkeytype run `which pytest` ./tests/
+	python -m monkeytype list-modules | grep ${module} | xargs -n1 monkeytype apply
 
 clean:
 	rm -r build *.pyc __pycache__ _tmp_* *.egg-info

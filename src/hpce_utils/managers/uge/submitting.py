@@ -150,8 +150,7 @@ def submit_script(
     if "has been submitted" not in uge_id:
         raise RuntimeError(f"Could not find UGE Job ID in: '{uge_id}'")
     uge_id = uge_id.split()[2]
-    uge_id = uge_id.split(".")
-    uge_id = uge_id[0]
+    uge_id = uge_id.split(".")[0]
 
     # Test format of job_id
     try:
@@ -181,7 +180,7 @@ def delete_job(job_id: str | int) -> None:
 
 
 def read_logfiles(
-    log_path: Path, job_id: str, ignore_stdout=True
+    log_path: Path, job_id: str, ignore_stdout: bool = True
 ) -> tuple[dict[Path, list[str]], dict[Path, list[str]]]:
     """Read logfiles produced by UGE task array. Ignore empty log files"""
     logger.debug(f"Looking for finished log files in {log_path}")
