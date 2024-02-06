@@ -45,3 +45,9 @@ def test_load() -> None:
     binpaths = os.environ.get("PATH", "").split(":")
     print(binpaths)
     assert "/does/not/exist/bin" in binpaths
+
+    # Check module loaded is in list
+    # NOTE Does not work, because module load only updates the python environ
+    # modules_loaded = lmod.get_modules()
+    # print(modules_loaded)
+    # assert MODULE_NAME in modules_loaded

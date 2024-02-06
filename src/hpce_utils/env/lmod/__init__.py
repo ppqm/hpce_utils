@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import subprocess
 import sys
 from functools import cache
@@ -147,7 +148,7 @@ def use(path: str | Path) -> None:
     module("use", str(path))
 
 
-def get_modules() -> dict[str, str]:
+def get_modules() -> list[str]:
     """Return all active LMOD modules. Hidden modules are ignored."""
 
     stderr = module("list", "")
@@ -156,28 +157,42 @@ def get_modules() -> dict[str, str]:
 
     lines = stderr.split("\n")
 
-    # Filter to only lines with modules
-    lines = [x for x in lines if ")" in x]
-    lines = [x for x in lines if "Hidden Module" not in x]
+    def _filter(line: str):
+        # Format: 1) name/version     10) name/version
 
-    module_names = dict()
+        if not len(line.strip()):
+            return False
+
+        if line[0] != " ":
+            return False
+
+        if ")" not in line:
+            return False
+
+        return True
+
+    # Filter to only lines with modules
+    lines = [line for line in lines if _filter(line)]
+
+    modules = list()
     for line in lines:
 
-        line = line.strip()
-        line = " ".join(line.split())  # replace multiple spaces with one
-        line = line.replace(" (H)", "@(H)")
-        line = line.replace(") ", "$$")
-        line_ = line.split()
+        # Standardize the line
+        line = " ".join(line.strip().split())
 
-        for mod in line_:
+        pattern = r"\d+\)"
+
+        mods = re.split(pattern, line)
+        mods = [x.strip() for x in mods if len(x)]
+
+        for mod in mods:
 
             if "(H)" in mod:
                 continue
 
-            idx, name = mod.split("$$")
-            module_names[idx] = name
+            modules.append(mod)
 
-    return module_names
+    return modules
 
 
 def get_paths() -> List[str]:
