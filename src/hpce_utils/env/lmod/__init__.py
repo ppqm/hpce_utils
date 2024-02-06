@@ -148,8 +148,15 @@ def use(path: str | Path) -> None:
     module("use", str(path))
 
 
-def get_modules() -> list[str]:
-    """Return all active LMOD modules. Hidden modules are ignored."""
+def get_modules() -> dict[int, str]:
+    """Return all active LMOD modules.
+
+    Hidden modules are ignored.
+
+    returns:
+        dict[number, modulename/version]
+
+    """
 
     stderr = module("list", "")
 
@@ -174,23 +181,25 @@ def get_modules() -> list[str]:
     # Filter to only lines with modules
     lines = [line for line in lines if _filter(line)]
 
-    modules = list()
+    modules = dict()
     for line in lines:
 
         # Standardize the line
         line = " ".join(line.strip().split())
 
-        pattern = r"\d+\)"
-
+        pattern = r"(\d+\))"
         mods = re.split(pattern, line)
         mods = [x.strip() for x in mods if len(x)]
 
-        for mod in mods:
+        # The delimiters are kept, so select every second
+        for key, mod in zip(mods[::2], mods[1::2]):
 
             if "(H)" in mod:
                 continue
 
-            modules.append(mod)
+            key = key.replace(")", "")
+            _key = int(key)
+            modules[_key] = mod
 
     return modules
 

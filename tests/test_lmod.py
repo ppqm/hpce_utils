@@ -50,4 +50,4 @@ def test_load() -> None:
     # NOTE Does not work, because module load only updates the python environ
     # modules_loaded = lmod.get_modules()
     # print(modules_loaded)
-    # assert MODULE_NAME in modules_loaded
+    # assert MODULE_NAME in list(modules_loaded.values())
