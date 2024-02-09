@@ -4,7 +4,8 @@ import shutil
 from pathlib import Path
 from typing import Optional, Union
 
-from hpce_utils import queues
+from hpce_utils import managers
+from hpce_utils.env import lmod
 
 ENVIRON_CORES = [
     "OMP_NUM_THREADS",
@@ -19,7 +20,7 @@ def get_available_cores() -> int:
 
     n_cores: Optional[int]
 
-    n_cores = queues.get_cores()
+    n_cores = managers.get_cores()
 
     if n_cores is not None:
         return n_cores
@@ -73,7 +74,7 @@ def set_threads(n_cores: int) -> None:
     n_cores_ = str(n_cores)
 
     for name in ENVIRON_CORES:
-        os.environ.set(name, n_cores_)
+        os.environ[name] = n_cores_
 
 
 def get_shm_path() -> Path | None:

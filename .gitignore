@@ -1,7 +1,10 @@
+
+# test and type
 .pytest
 conda
 pkgs
 scripts
+*.sqlite3
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

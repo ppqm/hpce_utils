@@ -1,10 +1,11 @@
 import logging
 import os
+import re
 import subprocess
 import sys
 from functools import cache
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, List, Tuple
 
 from hpce_utils.shell import which
 
@@ -12,7 +13,7 @@ _logger = logging.getLogger("lmod")
 
 
 @cache
-def get_lmod_executable():
+def get_lmod_executable() -> Path | None:
     _dir = os.environ.get("LMOD_DIR", None)
     dir = Path(_dir) if _dir is not None else None
     exe = dir / "lmod" if dir is not None else None
@@ -31,9 +32,7 @@ def get_lmod_executable():
 
 
 # pylint: disable=too-many-locals
-def module(
-    command: str, arguments: str, cmd: Optional[Path] = get_lmod_executable()
-) -> Optional[str]:
+def module(command: str, arguments: str, cmd: Path | None = get_lmod_executable()) -> str | None:
     """Use lmod to execute enviromental changes"""
 
     _logger.info(f"module {command} {arguments}")
@@ -149,8 +148,15 @@ def use(path: str | Path) -> None:
     module("use", str(path))
 
 
-def get_modules() -> dict[str, str]:
-    """Return all active LMOD modules. Hidden modules are ignored."""
+def get_modules() -> dict[int, str]:
+    """Return all active LMOD modules.
+
+    Hidden modules are ignored.
+
+    returns:
+        dict[number, modulename/version]
+
+    """
 
     stderr = module("list", "")
 
@@ -158,28 +164,44 @@ def get_modules() -> dict[str, str]:
 
     lines = stderr.split("\n")
 
-    # Filter to only lines with modules
-    lines = [x for x in lines if ")" in x]
-    lines = [x for x in lines if "Hidden Module" not in x]
+    def _filter(line: str):
+        # Format: 1) name/version     10) name/version
 
-    module_names = dict()
+        if not len(line.strip()):
+            return False
+
+        if line[0] != " ":
+            return False
+
+        if ")" not in line:
+            return False
+
+        return True
+
+    # Filter to only lines with modules
+    lines = [line for line in lines if _filter(line)]
+
+    modules = dict()
     for line in lines:
 
-        line = line.strip()
-        line = " ".join(line.split())  # replace multiple spaces with one
-        line = line.replace(" (H)", "@(H)")
-        line = line.replace(") ", "$$")
-        line_ = line.split()
+        # Standardize the line
+        line = " ".join(line.strip().split())
 
-        for mod in line_:
+        pattern = r"(\d+\))"
+        mods = re.split(pattern, line)
+        mods = [x.strip() for x in mods if len(x)]
+
+        # The delimiters are kept, so select every second
+        for key, mod in zip(mods[::2], mods[1::2]):
 
             if "(H)" in mod:
                 continue
 
-            idx, name = mod.split("$$")
-            module_names[idx] = name
+            key = key.replace(")", "")
+            _key = int(key)
+            modules[_key] = mod
 
-    return module_names
+    return modules
 
 
 def get_paths() -> List[str]:

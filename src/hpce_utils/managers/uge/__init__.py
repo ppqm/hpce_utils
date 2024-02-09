@@ -121,63 +121,16 @@ import os
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from hpce_utils.queues.uge import constants
+from hpce_utils.managers.uge import constants, status, submitting
 from hpce_utils.shell import which
 
 _logger = logging.getLogger(__name__)
-
-UGE_KEYWORDS = [
-    "ARC",
-    "SGE_ROOT",
-    "SGE_BINARY_PATH",
-    "SGE_CELL",
-    "SGE_JOB_SPOOL_DIR",
-    "SGE_O_HOME",
-    "SGE_O_HOST",
-    "SGE_O_LOGNAME",
-    "SGE_O_MAIL",
-    "SGE_O_PATH",
-    "SGE_O_SHELL",
-    "SGE_O_TZ",
-    "SGE_O_WORKDIR",
-    "SGE_CKPT_ENV",
-    "SGE_CKPT_DIR",
-    "SGE_STDERR_PATH",
-    "SGE_STDOUT_PATH",
-    "SGE_TASK_ID",
-    "ENVIRONMENT",
-    "HOME",
-    "HOSTNAME",
-    "JOB_ID",
-    "JOB_NAME",
-    "LOGNAME",
-    "NHOSTS",
-    "NQUEUES",
-    "NSLOTS",
-    "PATH",
-    "PE",
-    "PE_HOSTFILE",
-    "QUEUE",
-    "REQUEST",
-    "RESTARTED",
-    "SHELL",
-    "TMPDIR",
-    "TMP",
-    "TZ",
-    "USER",
-    "OMP_NUM_THREADS",
-    "OPENBLAS_NUM_THREADS",
-    "VECLIB_MAXIMUM_THREADS",
-    "MKL_NUM_THREADS",
-    "NUMEXPR_NUM_THREADS",
-    "HOSTNAME",
-]
 
 
 def has_uge() -> bool:
     """Check if cluster has UGE setup"""
 
-    exe = which(constants.qsub)
+    exe = which(constants.command_submit)
 
     if exe is not None:
         return True
@@ -208,7 +161,7 @@ def get_env() -> Dict[str, Optional[str]]:
 
     properties = {}
 
-    for key in UGE_KEYWORDS:
+    for key in constants.UGE_KEYWORDS:
         properties[key] = os.getenv(key)
 
     return properties
@@ -258,3 +211,19 @@ def get_cores() -> int:
     n_cores_ = int(n_cores)
 
     return n_cores_
+
+
+def is_interactive():
+    """Check if job is run via interactive shell (e.i. qrsh), or submission"""
+
+    uge_type = os.getenv("REQUEST", None)
+
+    # Not UGE
+    if not uge_type:
+        return False
+
+    # if request is qrlogin, then qrsh was used
+    if uge_type == "QRLOGIN":
+        return True
+
+    return False
