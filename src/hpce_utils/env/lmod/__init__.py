@@ -3,17 +3,17 @@ import os
 import re
 import subprocess
 import sys
-from functools import cache
+from functools import lru_cache
 from pathlib import Path
-from typing import Any, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from hpce_utils.shell import which
 
 _logger = logging.getLogger("lmod")
 
 
-@cache
-def get_lmod_executable() -> Path | None:
+@lru_cache(maxsize=None)
+def get_lmod_executable() -> Optional[Path]:
     _dir = os.environ.get("LMOD_DIR", None)
     dir = Path(_dir) if _dir is not None else None
     exe = dir / "lmod" if dir is not None else None
@@ -32,7 +32,9 @@ def get_lmod_executable() -> Path | None:
 
 
 # pylint: disable=too-many-locals
-def module(command: str, arguments: str, cmd: Path | None = get_lmod_executable()) -> str | None:
+def module(
+    command: str, arguments: str, cmd: Optional[Path] = get_lmod_executable()
+) -> Optional[str]:
     """Use lmod to execute enviromental changes"""
 
     _logger.info(f"module {command} {arguments}")
@@ -143,12 +145,12 @@ def load(module_name: str) -> None:
     module("load", module_name)
 
 
-def use(path: str | Path) -> None:
+def use(path: Optional[Path]) -> None:
     """Use path in MODULEPATH"""
     module("use", str(path))
 
 
-def get_modules() -> dict[int, str]:
+def get_modules() -> Dict[int, str]:
     """Return all active LMOD modules.
 
     Hidden modules are ignored.

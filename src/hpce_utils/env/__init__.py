@@ -77,7 +77,7 @@ def set_threads(n_cores: int) -> None:
         os.environ[name] = n_cores_
 
 
-def get_shm_path() -> Path | None:
+def get_shm_path() -> Optional[Path]:
     """
     Get shared memory path for current node.
 

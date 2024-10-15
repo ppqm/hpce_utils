@@ -1,7 +1,7 @@
-from typing import Any
+from typing import Any, List, Optional
 
 
-def parse_value(value: Any) -> str | None:
+def parse_value(value: Any) -> Optional[str]:
     """Parse values and stringify the options"""
 
     if value is None:
@@ -12,8 +12,8 @@ def parse_value(value: Any) -> str | None:
         return ""
 
     if isinstance(value, list):
-        values: list[str | None] = [parse_value(x) for x in value if x is not None]
-        _values: list[str] = [x for x in values if x is not None]
+        values: List[Optional[str]] = [parse_value(x) for x in value if x is not None]
+        _values: List[str] = [x for x in values if x is not None]
         return " ".join(_values)
 
     if isinstance(value, str):

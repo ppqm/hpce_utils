@@ -3,7 +3,7 @@ import logging
 import os
 import re
 import time
-from typing import Dict, Iterator, List
+from typing import Dict, Iterator, List, Optional, Tuple, Union
 
 import pandas as pd  # type: ignore
 from pandas import DataFrame  # type: ignore
@@ -61,7 +61,7 @@ class TaskarrayProgress:
         self,
         pdf: DataFrame,
         job_id: str,
-        job_info: Dict[str, str] | None = None,
+        job_info: Optional[Dict[str, str]] = None,
         position: int = 0,
     ) -> None:
         self.position = position
@@ -152,7 +152,7 @@ class TaskarrayProgress:
         self.pbar.close()
 
 
-def _get_qstatj_key(line: str) -> tuple[str | None, str]:
+def _get_qstatj_key(line: str) -> Tuple[Optional[str], str]:
     """Split column key and column value from qstat -j output"""
 
     # format:
@@ -298,7 +298,7 @@ def parse_taskarray(pdf: DataFrame) -> pd.DataFrame:
 
 
 def parse_qacctj(stdout: str) -> List[Dict[str, str]]:
-    output: list[dict[str, str]] = [dict()]
+    output: List[Dict[str, str]] = [dict()]
 
     _stdout = stdout.split("\n")
 
@@ -320,7 +320,7 @@ def parse_qacctj(stdout: str) -> List[Dict[str, str]]:
     return output
 
 
-def _get_errors_from_qstatj(qstatj: dict[str, str]) -> list[str]:
+def _get_errors_from_qstatj(qstatj: Dict[str, str]) -> List[str]:
     key1 = "error reason   "
     error_keys = [key for key in qstatj.keys() if key1 in key]
     errors = [qstatj[key] for key in error_keys]
@@ -328,10 +328,10 @@ def _get_errors_from_qstatj(qstatj: dict[str, str]) -> list[str]:
 
 
 def follow_progress(
-    username: str | None = None,
-    job_ids: list[int | str] | None = None,
+    username: Optional[str] = None,
+    job_ids: Optional[List[Union[int, str]]] = None,
     update_interval: int = 5,
-    exit_after: int | None = None,
+    exit_after: Optional[int] = None,
 ) -> None:
     """Follow UGE jobs for $USER. All jobs or subset of job IDs.
 
@@ -380,7 +380,7 @@ def follow_progress(
             logger.info(f"Ignoring {job_id}, not a task-array")
             continue
 
-        progress = TaskarrayProgress(qstat, job_id, job_info=qstatj, position=i)
+        progress = TaskarrayProgress(qstat, str(job_id), job_info=qstatj, position=i)
         progresses.append(progress)
 
     # TODO Get status if jobs are finished or deleted
@@ -439,7 +439,7 @@ def follow_progress(
     return
 
 
-def get_qstatj(job_id: str | int) -> dict[str, str]:
+def get_qstatj(job_id: Union[str, int]) -> Dict[str, str]:
     """Get job information"""
     stdout, _ = execute(f"qstat -j {job_id} | head -n 100")
     return parse_qstatj(stdout)
@@ -457,7 +457,7 @@ def get_qstat(username: str) -> pd.DataFrame:
     return pdf_
 
 
-def get_qacctj(job_id: str | int) -> pd.DataFrame:
+def get_qacctj(job_id: Union[str, int]) -> pd.DataFrame:
     """Get detailed job information"""
 
     stdout, _ = execute(f"qacct -j {job_id}")
@@ -491,7 +491,7 @@ def get_cluster_usage() -> DataFrame:
 
 
 def wait_for_jobs(
-    jobs: list[str], respiratory: int = 60, include_status: bool = True
+    jobs: List[str], respiratory: int = 60, include_status: bool = True
 ) -> Iterator[str]:
     """ """
 

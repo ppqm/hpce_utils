@@ -4,7 +4,7 @@ import shutil
 import subprocess
 from pathlib import Path, PosixPath
 from subprocess import TimeoutExpired
-from typing import Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +20,7 @@ def command_exists(cmd):
     return True
 
 
-def switch_workdir(path: Path | None) -> bool:
+def switch_workdir(path: Optional[Path]) -> bool:
     """Check if it makes sense to change directory"""
 
     if path is None:
@@ -40,7 +40,7 @@ def switch_workdir(path: Path | None) -> bool:
     return True
 
 
-def stream(cmd: str, cwd: Path | None = None, shell: bool = True):
+def stream(cmd: str, cwd: Optional[Path] = None, shell: bool = True):
     """Execute command in directory, and stream stdout. Last yield is
     stderr
 
@@ -75,7 +75,7 @@ def stream(cmd: str, cwd: Path | None = None, shell: bool = True):
 
 
 def execute(
-    cmd: str, cwd: Path | None = None, shell: bool = True, timeout: None = None
+    cmd: str, cwd: Optional[Path] = None, shell: bool = True, timeout: None = None
 ) -> Tuple[str, str]:
     """Execute command in directory, and return stdout and stderr
 
@@ -177,7 +177,7 @@ def directory_remove_trail(path: str) -> str:
     return path
 
 
-def get_environment(env_names: list[str]) -> dict[str, str]:
+def get_environment(env_names: List[str]) -> Dict[str, str]:
     """Get environ variables that matter"""
     environ = dict()
 
@@ -190,7 +190,7 @@ def get_environment(env_names: list[str]) -> dict[str, str]:
     return environ
 
 
-def which(cmd: str | Path) -> Path | None:
+def which(cmd: Union[Path, str]) -> Optional[Path]:
     """Check if command exists in enviroment"""
     path_ = shutil.which(cmd)
 
