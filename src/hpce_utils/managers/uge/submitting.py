@@ -10,6 +10,7 @@ from hpce_utils.shell import execute
 
 DEFAULT_LOG_DIR = Path("./ugelogs/")
 TEMPLATE_TASKARRAY = Path(__file__).parent / "templates" / "submit-task-array.jinja"
+TEMPLATE_HOLDING = Path(__file__).parent / "templates" / "submit-holding.jinja"
 logger = logging.getLogger(__name__)
 
 
@@ -56,6 +57,8 @@ def generate_taskarray_script(
     task_start: int = 1,
     task_step: int = 1,
     task_stop: Optional[int] = None,
+    hold_job_id: Optional[str] = None,
+    user_email: Optional[str] = None,
     generate_dirs: bool = True,
 ) -> str:
     """
@@ -71,12 +74,7 @@ def generate_taskarray_script(
     kwargs = locals()
 
     if generate_dirs:
-        if log_dir is not None and not log_dir.exists():
-            log_dir.mkdir(parents=True)
-
-        if log_dir is not None and log_dir.is_dir():
-            _log_dir = str(log_dir.resolve() / "_")[:-1]  # Added a trailing slash
-            kwargs["log_dir"] = _log_dir
+        kwargs["log_dir"] = generate_log_dir(log_dir)
 
     with open(TEMPLATE_TASKARRAY) as file_:
         template = Template(file_.read())
@@ -84,6 +82,49 @@ def generate_taskarray_script(
     script = template.render(**kwargs)
 
     return script
+
+
+def generate_hold_script(
+    hold_job_id: str,
+    user_email: str | None = None,
+    cmd: str = "sleep 1",
+    name: str = "UGEHoldJob",
+    log_dir: Path | None = DEFAULT_LOG_DIR,
+    generate_dirs: bool = True,
+) -> str:
+
+    if generate_dirs:
+        log_dir_str = generate_log_dir(log_dir)
+    else:
+        log_dir_str = str(log_dir.resolve()) if log_dir is not None else None
+
+    with open(TEMPLATE_HOLDING) as file_:
+        template = Template(file_.read())
+
+    script = template.render(
+        hold_job_id=hold_job_id,
+        user_email=user_email,
+        cmd=cmd,
+        name=name,
+        log_dir=log_dir_str,
+    )
+
+    return script
+
+
+def generate_log_dir(log_dir: Path | None) -> str | None:
+
+    if log_dir is not None:
+        if not log_dir.exists():
+            log_dir.mkdir(parents=True)
+
+        if log_dir.is_dir():
+            _log_dir = str(log_dir.resolve() / "_")[:-1]  # Added a trailing slash
+            return _log_dir
+
+        return str(log_dir.resolve())
+
+    return None
 
 
 # pylint: disable=dangerous-default-value

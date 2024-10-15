@@ -358,11 +358,14 @@ def follow_progress(
 
     for i, job_id in enumerate(job_ids):
 
-        qstatj = get_qstatj(job_id)
+        # Make sure that job_id is in qstat
+        if str(job_id) not in qstat["job"].values:
+            logger.warning(f"Job ID {job_id} not found in qstat. Skipping...")
+            continue
 
-        # Assert job_id in qstat
         job = qstat.loc[qstat["job"] == str(job_id)]  # will return one result
         job = job.iloc[0]
+        qstatj = get_qstatj(job_id)
 
         if job.running + job.pending == 0 and job.error > 0:
             # crashed job

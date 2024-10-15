@@ -9,6 +9,10 @@
 #$ -tc {{ task_concurrent }}{% endif %}
 #$ -o {{ log_dir | default("./log", true) }}
 #$ -e {{ log_dir | default("./log", true) }}
+{% if user_email %}#$ -M {{ user_email }}
+#$ -m ea {% endif %}
+{% if hold_jobid %} #$ -hold_jid {{ hold_jobid }} {% endif %}
+
 {% if cwd %}cd {{ cwd }}
 {% endif %}{% for key, value in environ.items() %}export {{ key }}={{ value }}
 {% endfor %}
