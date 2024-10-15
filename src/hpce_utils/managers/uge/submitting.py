@@ -1,5 +1,6 @@
 import logging
 from pathlib import Path
+from typing import Dict, List, Optional, Tuple, Union
 
 from jinja2 import Template
 
@@ -44,17 +45,17 @@ def generate_command(sync: bool = False, export: bool = False) -> str:
 def generate_taskarray_script(
     cmd: str,
     cores: int = 1,
-    cwd: Path | None = None,
-    environ: dict[str, str] = {},
+    cwd: Optional[Path] = None,
+    environ: Dict[str, str] = {},
     hours: int = 7,
-    mins: int | None = None,
-    log_dir: Path | None = DEFAULT_LOG_DIR,
+    mins: Optional[int] = None,
+    log_dir: Optional[Path] = DEFAULT_LOG_DIR,
     mem: int = 4,
     name: str = "UGEJob",
     task_concurrent: int = 100,
     task_start: int = 1,
     task_step: int = 1,
-    task_stop: int | None = None,
+    task_stop: Optional[int] = None,
     generate_dirs: bool = True,
 ) -> str:
     """
@@ -88,12 +89,12 @@ def generate_taskarray_script(
 # pylint: disable=dangerous-default-value
 def submit_script(
     submit_script: str,
-    scr: str | Path | None = None,
-    filename: str | None = None,
+    scr: Optional[Union[str, Path]] = None,
+    filename: Optional[str] = None,
     cmd: str = constants.command_submit,
-    cmd_options: dict[str, str] = {},
+    cmd_options: Dict[str, str] = {},
     dry: bool = False,
-) -> tuple[str | None, Path | None]:
+) -> Tuple[Optional[str], Optional[Path]]:
     """Submit script and return UGE Job ID
 
     return:
@@ -163,7 +164,7 @@ def submit_script(
     return uge_id, scr / filename
 
 
-def delete_job(job_id: str | int) -> None:
+def delete_job(job_id: Optional[str]) -> None:
 
     cmd = f"qdel {job_id}"
     logger.debug(cmd)
@@ -181,7 +182,7 @@ def delete_job(job_id: str | int) -> None:
 
 def read_logfiles(
     log_path: Path, job_id: str, ignore_stdout: bool = True
-) -> tuple[dict[Path, list[str]], dict[Path, list[str]]]:
+) -> Tuple[Dict[Path, List[str]], Dict[Path, List[str]]]:
     """Read logfiles produced by UGE task array. Ignore empty log files"""
     logger.debug(f"Looking for finished log files in {log_path}")
     stderr_log_filenames = log_path.glob(f"*.e{job_id}*")
@@ -204,7 +205,7 @@ def read_logfiles(
     return stdout, stderr
 
 
-def parse_logfile(filename: Path) -> list[str]:
+def parse_logfile(filename: Path) -> List[str]:
     """Read logfile, without line-breaks"""
     # TODO Maybe find exceptions and raise them?
     with open(filename, "r") as f:

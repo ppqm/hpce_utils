@@ -1,7 +1,9 @@
+from typing import Optional
+
 from hpce_utils.managers import slurm, uge
 
 
-def get_cores() -> int | None:
+def get_cores() -> Optional[int]:
 
     n_cores = None
 
