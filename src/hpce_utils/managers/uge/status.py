@@ -54,7 +54,7 @@ COLUMN_JOB = "job"
 COLUMN_JOB_ID = "job_number"
 COLUMN_SUBMISSION_TIME = "submission_time"
 COLUMN_TASKARRAY = "job-array tasks"
-
+#
 
 class TaskarrayProgress:
     def __init__(
