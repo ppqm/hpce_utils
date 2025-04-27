@@ -9,7 +9,7 @@ import pandas as pd  # type: ignore
 from pandas import DataFrame  # type: ignore
 from tqdm import tqdm  # type: ignore
 
-from hpce_utils.shell import execute  # type: ignore
+from hpce_utils.shell import execute, execute_with_retry  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +54,7 @@ COLUMN_JOB = "job"
 COLUMN_JOB_ID = "job_number"
 COLUMN_SUBMISSION_TIME = "submission_time"
 COLUMN_TASKARRAY = "job-array tasks"
-#
+
 
 class TaskarrayProgress:
     def __init__(
@@ -332,6 +332,7 @@ def follow_progress(
     job_ids: Optional[List[Union[int, str]]] = None,
     update_interval: int = 5,
     exit_after: Optional[int] = None,
+    max_retries: int = 3,
 ) -> None:
     """Follow UGE jobs for $USER. All jobs or subset of job IDs.
 
@@ -344,7 +345,7 @@ def follow_progress(
     if username is None:
         raise ValueError("Unable to get USER env var")
 
-    qstat = get_qstat(username)
+    qstat = get_qstat(username, max_retries=max_retries, update_interval=update_interval)
 
     if not len(qstat):
         logger.warning(f"No jobs for {username}")
@@ -365,7 +366,7 @@ def follow_progress(
 
         job = qstat.loc[qstat["job"] == str(job_id)]  # will return one result
         job = job.iloc[0]
-        qstatj = get_qstatj(job_id)
+        qstatj = get_qstatj(job_id, max_retries=max_retries, update_interval=update_interval)
 
         if job.running + job.pending == 0 and job.error > 0:
             # crashed job
@@ -408,7 +409,7 @@ def follow_progress(
             break
 
         time.sleep(update_interval)
-        qstat = get_qstat(username)
+        qstat = get_qstat(username, max_retries=max_retries, update_interval=update_interval)
 
         if len(qstat) == 0:
             for _, array_bar in enumerate(progresses):
@@ -439,15 +440,27 @@ def follow_progress(
     return
 
 
-def get_qstatj(job_id: Union[str, int]) -> Dict[str, str]:
+def get_qstatj(
+    job_id: Union[str, int], max_retries: int = 3, update_interval: int = 5
+) -> Dict[str, str]:
     """Get job information"""
-    stdout, _ = execute(f"qstat -j {job_id} | head -n 100")
+
+    stdout, _ = execute_with_retry(
+        f"qstat -j {job_id} | head -n 100",
+        max_retries=max_retries,
+        update_interval=update_interval,
+    )
+
     return parse_qstatj(stdout)
 
 
-def get_qstat(username: str) -> pd.DataFrame:
+def get_qstat(username: str, max_retries: int = 3, update_interval: int = 5) -> pd.DataFrame:
     """Get job information for user"""
-    stdout, _ = execute(f"qstat -u {username}")
+    stdout, _ = execute_with_retry(
+        f"qstat -u {username}",
+        max_retries=max_retries,
+        update_interval=update_interval,
+    )
 
     if stdout is None or len(stdout) == 0:
         return pd.DataFrame({})
