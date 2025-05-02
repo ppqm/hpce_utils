@@ -2,8 +2,8 @@ import logging
 import os
 import shutil
 import subprocess
-from pathlib import Path, PosixPath
-from subprocess import TimeoutExpired
+import time
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
 
 logger = logging.getLogger(__name__)
@@ -75,7 +75,11 @@ def stream(cmd: str, cwd: Optional[Path] = None, shell: bool = True):
 
 
 def execute(
-    cmd: str, cwd: Optional[Path] = None, shell: bool = True, timeout: None = None
+    cmd: str,
+    cwd: Optional[Path] = None,
+    shell: bool = True,
+    timeout: None = None,
+    check: bool = True,
 ) -> Tuple[str, str]:
     """Execute command in directory, and return stdout and stderr
 
@@ -84,26 +88,72 @@ def execute(
     :param shell: Use shell or not in subprocess
     :param timeout: Stop the process at timeout (seconds)
     :returns: stdout and stderr as string
+    :raises: subprocess.CalledProcessError if check is True and command fails
+    :raises: subprocess.TimeoutExpired if timeout is reached
+    :raises: FileNotFoundError if check is True and command is not found
     """
 
     if not switch_workdir(cwd):
         cwd = None
 
-    process = subprocess.Popen(
-        cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        universal_newlines=True,
-        shell=shell,
-        cwd=cwd,
-    )
-
     try:
-        stdout, stderr = process.communicate(timeout=timeout)
-    except TimeoutExpired:
-        logger.warning("Shell execution timed out")
-        stdout = ""
-        stderr = ""
+        process = subprocess.run(
+            cmd,
+            cwd=cwd,
+            encoding="utf-8",
+            shell=shell,
+            check=check,
+            capture_output=True,
+            timeout=timeout,
+        )
+    except subprocess.CalledProcessError as exc:
+        logger.error("Command %s failed", cmd)
+        logger.error("stdout: %s", exc.stdout)
+        logger.error("stderr: %s", exc.stderr)
+        logger.error("returncode: %s", exc.returncode)
+        raise exc
+
+    except FileNotFoundError as exc:
+        logger.error("Command %s not found:", cmd)
+        if check:
+            raise exc
+        else:
+            return "", ""
+
+    except subprocess.TimeoutExpired as exc:
+        logger.error("Command %s timed out:", cmd)
+        if check:
+            raise exc
+        else:
+            stderr = "" if exc.stderr is None else exc.stderr.decode("utf-8")
+            stdout = "" if exc.stdout is None else exc.stdout.decode("utf-8")
+
+            return stdout, stderr
+
+    return process.stdout, process.stderr
+
+
+def execute_with_retry(
+    cmd: str,
+    cwd: Optional[Path] = None,
+    shell: bool = True,
+    timeout: None = None,
+    max_retries: int = 3,
+    update_interval: int = 5,
+) -> Tuple[str, str]:
+
+    num_retries = 0
+    while num_retries < max_retries:
+        try:
+            stdout, stderr = execute(cmd, cwd=cwd, shell=shell, timeout=timeout, check=True)
+            break
+        except (subprocess.TimeoutExpired, subprocess.CalledProcessError):
+            logger.warning("Error while executing %s. Try again later.", cmd)
+            time.sleep(update_interval)
+            num_retries += 1
+    else:
+        logger.error("Failed to get qstatj after %d retries", max_retries)
+        return "", ""
 
     return stdout, stderr
 
