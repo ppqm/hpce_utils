@@ -51,9 +51,9 @@ def test_taskarray(home_tmp_path: Path):
 
     # Wait
     finished_job_id: str | None = None
-    for finished_job_id in status.wait_for_jobs([job_id], respiratory=10):
+    for finished_job_id_ in status.wait_for_jobs([job_id], respiratory=10):
         print(f"job {finished_job_id} finished")
-        finished_job_id = finished_job_id
+        finished_job_id = finished_job_id_
 
     assert finished_job_id is not None
     stdout, stderr = submitting.read_logfiles(log_dir, finished_job_id, ignore_stdout=False)
@@ -75,8 +75,8 @@ def test_taskarray(home_tmp_path: Path):
             assert False, f"Unexpected line in log file: {line}"
 
     # Parse output
-    for _, line in stdout.items():
-        assert success_string in line
+    for _, lines in stdout.items():
+        assert success_string in lines
 
 
 @pytest.mark.skip(reason="Not implemented")
@@ -165,7 +165,7 @@ def test_failed_command(home_tmp_path: Path):
             if "=>" in line:
                 continue
             filtered_stderr[file].append(line)
-    
+
     assert len(filtered_stderr) == 1
 
 

@@ -1,10 +1,9 @@
-from unittest.mock import patch, MagicMock
 from subprocess import CalledProcessError as CPError
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from hpce_utils.managers.uge import status 
-
+from hpce_utils.managers.uge import status
 
 VALID_QSTAT_OUTPUT_RUNNING = """
 job-ID     prior   name       user         state submit/start at     queue                          jclass                         slots ja-task-ID
@@ -20,16 +19,16 @@ VALID_QSTAT_OUTPUT_FINISHED = ""
 QSTATJ_OUTPUT_FINISHED = ""
 QACCTJ_OUTPUT_FINISHED = """
 ==============================================================
-qname                    some.q          
+qname                    some.q
 hostname                 some.host
-group                    some_group           
-owner                    username          
-project                  NONE                
+group                    some_group
+owner                    username
+project                  NONE
 department               some_department
-jobname                  some_name            
-jobnumber                12345678           
+jobname                  some_name
+jobnumber                12345678
 taskid                   1
-pe_taskid                NONE                
+pe_taskid                NONE
 """
 
 
@@ -68,7 +67,7 @@ def test_follow_progress():
     qacctj_finished.stdout = QACCTJ_OUTPUT_FINISHED
     qacctj_finished.stderr = ""
     qacctj_finished.returncode = 0
-    
+
     side_effects = [
         mock_proc_running,
         mock_proc_qstatj,
@@ -76,17 +75,19 @@ def test_follow_progress():
         mock_proc_finished,
         qstatj_finished_error,
         qacctj_finished,
-        qstatj_finished_error, # for array_bar.log_errors()
+        qstatj_finished_error,  # for array_bar.log_errors()
     ]
 
-    # Patch subprocess.run 
+    # Patch subprocess.run
     with patch("hpce_utils.shell.subprocess.run", side_effect=side_effects) as mock_subprocess:
         # Patch tqdm to avoid actual progress bars in test output
         with patch("hpce_utils.managers.uge.status.tqdm"):
             status.follow_progress(
-                username="username", job_ids=["12345678"], update_interval=0.1,
-                )
-        
+                username="username",
+                job_ids=["12345678"],
+                update_interval=0.1,
+            )
+
         assert mock_subprocess.call_count == 7
 
 
@@ -138,7 +139,7 @@ def test_follow_progress_with_qstat_failures(caplog):
         mock_proc_finished,
         qstatj_finished_error,
         qacctj_finished,
-        qstatj_finished_error, # for array_bar.log_errors()
+        qstatj_finished_error,  # for array_bar.log_errors()
     ]
 
     # Patch subprocess.run in the correct module
@@ -146,8 +147,10 @@ def test_follow_progress_with_qstat_failures(caplog):
         # Patch tqdm to avoid actual progress bars in test output
         with patch("hpce_utils.managers.uge.status.tqdm"):
             with caplog.at_level("WARNING", logger="hpce_utils.managers.uge.status"):
-                status.follow_progress(username="username", job_ids=["12345678"], update_interval=0.1)
-        
+                status.follow_progress(
+                    username="username", job_ids=["12345678"], update_interval=0.1
+                )
+
         assert mock_subprocess.call_count == 9
 
     # Check that the log contains the expected messages
@@ -197,17 +200,17 @@ def test_follow_progress_with_initial_qstat_failures(caplog):
 
     # The sequence: error, error, running, qstat -j, running, error, running, finished
     side_effects = [
-        qstat_error, 
-        qstat_error, 
+        qstat_error,
+        qstat_error,
         mock_proc_running,
         mock_proc_qstatj,
-        mock_proc_running, 
+        mock_proc_running,
         qstat_error,
         mock_proc_running,
         mock_proc_finished,
         qstatj_finished_error,
         qacctj_finished,
-        qstatj_finished_error, # for array_bar.log_errors()
+        qstatj_finished_error,  # for array_bar.log_errors()
     ]
 
     # Patch subprocess.run in the correct module
@@ -215,8 +218,10 @@ def test_follow_progress_with_initial_qstat_failures(caplog):
         # Patch tqdm to avoid actual progress bars in test output
         with patch("hpce_utils.managers.uge.status.tqdm"):
             with caplog.at_level("WARNING", logger="hpce_utils.managers.uge.status"):
-                status.follow_progress(username="username", job_ids=["12345678"], update_interval=0.1, exit_after=5)
-        
+                status.follow_progress(
+                    username="username", job_ids=["12345678"], update_interval=0.1, exit_after=5
+                )
+
         assert mock_subprocess.call_count == 11
 
     # Check that the log contains the expected messages
@@ -224,4 +229,3 @@ def test_follow_progress_with_initial_qstat_failures(caplog):
     assert "stdout" in all_logs
     assert "stderr" in all_logs
     assert "returncode" in all_logs
-

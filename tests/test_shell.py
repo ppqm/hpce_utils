@@ -1,8 +1,9 @@
 import subprocess
 
-import pytest 
+import pytest
 
 from hpce_utils import shell
+
 
 def test_subprocess_error():
     command_fails = "this_command_does_not_exist"
