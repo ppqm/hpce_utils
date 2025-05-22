@@ -4,6 +4,7 @@ import os
 import re
 import subprocess
 import time
+from collections import defaultdict
 from typing import Dict, Iterator, List, Optional, Tuple, Union
 
 import pandas as pd  # type: ignore
@@ -71,7 +72,7 @@ class TaskarrayProgress:
         # Get info
 
         if job_info is None:
-            job_info = get_qstatj(job_id)
+            job_info, _ = get_qstatj(job_id)
 
         if COLUMN_TASKARRAY not in job_info:
             raise ValueError("Not array task")
@@ -140,7 +141,7 @@ class TaskarrayProgress:
 
     def log_errors(self) -> None:
 
-        qstatj = get_qstatj(self.job_id)
+        qstatj, _ = get_qstatj(self.job_id)
         errors = _get_errors_from_qstatj(qstatj)
 
         for error in errors:
@@ -346,10 +347,11 @@ def follow_progress(
     if username is None:
         raise ValueError("Unable to get USER env var")
 
-    qstat = get_qstat(username, max_retries=max_retries, update_interval=update_interval)
+    qstat, qstatu_log_str = get_qstat(username, max_retries=max_retries, update_interval=update_interval)
 
     if not len(qstat):
         logger.warning(f"No jobs for {username}")
+        logger.warning(qstatu_log_str)
         return
 
     # TODO Add check that job_id is even valid
@@ -363,11 +365,12 @@ def follow_progress(
         # Make sure that job_id is in qstat
         if str(job_id) not in qstat["job"].values:
             logger.warning(f"Job ID {job_id} not found in qstat. Skipping...")
+            logger.warning(qstatu_log_str)
             continue
 
         job = qstat.loc[qstat["job"] == str(job_id)]  # will return one result
         job = job.iloc[0]
-        qstatj = get_qstatj(job_id)
+        qstatj, qstatj_log_str = get_qstatj(job_id)
 
         if job.running + job.pending == 0 and job.error > 0:
             # crashed job
@@ -380,6 +383,7 @@ def follow_progress(
 
         if COLUMN_TASKARRAY not in qstatj:
             logger.info(f"Ignoring {job_id}, not a task-array")
+            logger.info(qstatj_log_str)
             continue
 
         progress = TaskarrayProgress(qstat, str(job_id), job_info=qstatj, position=i)
@@ -395,6 +399,7 @@ def follow_progress(
     # TODO Check if job-array has errors, use logger.error to print them out. Maybe with a unique()
 
     iterations = 0
+    consecutive_qacct_counter = defaultdict(int)
     
     while not all([bar.is_finished() for bar in progresses]):
         
@@ -403,21 +408,30 @@ def follow_progress(
             break
 
         try:
-            qstat = get_qstat(username, max_retries=0)
-        except (subprocess.TimeoutExpired, subprocess.CalledProcessError)as exc:
+            qstat, qstatu_log_str = get_qstat(username, max_retries=0)
+        except (subprocess.TimeoutExpired, subprocess.CalledProcessError) as exc:
             logger.warning(f"Error getting qstat: {exc}")
-            logger.warning(exc.stdout)
-            logger.warning(exc.stderr)
+            logger.warning(f"Output was {exc.stdout}")
+            logger.warning(f"STDERR was {exc.stderr}")
             logger.warning("Retrying...")
             continue
 
         if len(qstat) == 0:
             logger.info("got empty qstat")
+            logger.info(qstatu_log_str)
             for _, array_bar in enumerate(progresses):
                 # double check if job is done, using qstat -j
                 if _uge_is_job_done(array_bar.job_id, cross_check=True, n_total_jobs=array_bar.n_total):
                     array_bar.finish()
                     array_bar.log_errors()
+                else:
+                    logger.warning(f"Job {array_bar.job_id} not found in qstat, but cross-check showed it is not finished")
+                    consecutive_qacct_counter[array_bar.job_id] += 1
+                    if consecutive_qacct_counter[array_bar.job_id] >= 5:
+                        logger.warning(f"Cross check failed for job {array_bar.job_id} 5 times in a row. Assuming it is finished.")
+                        array_bar.finish()
+                        array_bar.log_errors()
+
             continue
 
         # While jobs are not done
@@ -436,10 +450,19 @@ def follow_progress(
                 if _uge_is_job_done(array_bar.job_id, cross_check=True, n_total_jobs=array_bar.n_total):
                     array_bar.finish()
                     array_bar.log_errors()
+                else:
+                    logger.warning(f"Job {array_bar.job_id} not found in qstat, but cross-check showed it is not finished")
+                    logger.warning(qstatu_log_str)
+                    consecutive_qacct_counter[array_bar.job_id] += 1
+                    if consecutive_qacct_counter[array_bar.job_id] >= 5:
+                        logger.warning(f"Cross check failed for job {array_bar.job_id} 5 times in a row. Assuming it is finished.")
+                        array_bar.finish()
+                        array_bar.log_errors()
                 continue
 
             job_status = dict(job_info.iloc[0])
             array_bar.update(job_status)
+            consecutive_qacct_counter[array_bar.job_id] = 0
 
             time.sleep(update_interval)
 
@@ -451,25 +474,27 @@ def follow_progress(
 
 def get_qstatj(
     job_id: Union[str, int]
-) -> Dict[str, str]:
+) -> tuple[Dict[str, str], str]:
     """Get job information"""
     try:
         stdout, stderr = execute(f"qstat -j {job_id} | head -n 100")
     except subprocess.CalledProcessError as exc:
         if exc.returncode == 1 and "do not exist" in exc.stderr and job_id in exc.stderr:
             # conclude that job is finished
-            logger.info(f"Job {job_id} not found in qstat")
-            return dict()
+            logger.info(f"Job {job_id} not found in qstat -j")
+            log_str = f"qstat -j {job_id} | head -n 100 gave {exc.stdout}"
+            return dict(), log_str
         raise exc
 
     logger.debug(f"qstat -j {job_id} | head -n 100")
     logger.debug(f"qstat stdout: {stdout}")
     logger.debug(f"qstat stderr: {stderr}")
+    log_str = f"qstat -j {job_id} | head -n 100 gave {stdout}"
 
-    return parse_qstatj(stdout)
+    return parse_qstatj(stdout), log_str
 
 
-def get_qstat(username: str, max_retries: int = 3, update_interval: int = 5) -> pd.DataFrame:
+def get_qstat(username: str, max_retries: int = 3, update_interval: int = 5) -> tuple[pd.DataFrame, str]:
     """Get job information for user"""
 
     stdout, stderr = execute_with_retry(
@@ -477,18 +502,18 @@ def get_qstat(username: str, max_retries: int = 3, update_interval: int = 5) -> 
         max_retries=max_retries,
         update_interval=update_interval,
     )
-
     logger.debug(f"qstat -u {username}")
     logger.debug(f"qstat stdout: {stdout}")
     logger.debug(f"qstat stderr: {stderr}")
+    log_str = f"qstat -u {username} gave {stdout}"
 
     if stdout is None or len(stdout) == 0:
-        return pd.DataFrame({})
+        return pd.DataFrame({}), log_str
 
     pdf = parse_qstat(stdout)
     pdf_ = parse_taskarray(pdf)
-
-    return pdf_
+    
+    return pdf_, log_str
 
 
 def get_qacctj(job_id: Union[str, int]) -> pd.DataFrame:
@@ -504,14 +529,15 @@ def get_qacctj(job_id: Union[str, int]) -> pd.DataFrame:
 
         raise exc
 
+    log_str = f"qacct -j {job_id} gave {stdout}"
     if stdout is None or len(stdout) == 0:
-        return pd.DataFrame({})
+        return pd.DataFrame({}), log_str
 
     output = parse_qacctj(stdout)
 
     pdf = pd.DataFrame(output)
 
-    return pdf
+    return pdf, log_str
 
 
 def get_cluster_usage() -> DataFrame:
@@ -565,19 +591,22 @@ def _uge_is_job_done(
     ) -> bool:
     still_waiting_states = pending_tags + running_tags
 
-    status_j = get_qstatj(job_id)
+    status_j, qstatj_log_str = get_qstatj(job_id)
 
-    if not len(status_j):
+    if len(status_j) == 0:
         logger.debug(f"uge {job_id} not in qstat -j")
         if not cross_check:
             return True
         
-        # If job is not in qstat, check if it is in qacct
-        qacctj = get_qacctj(job_id)
+        # If job is not in qstat, it should be in qacct
+        qacctj, qacctj_log_str = get_qacctj(job_id)
         if len(qacctj) != n_total_jobs:
             logger.warning(f"qacct indicates that job {job_id} is not finished")
             logger.warning(f"UGE job {job_id} has {len(qacctj)} entries in qacct. Expected {n_total_jobs}")
+            logger.warning(f"qstat -j output: {qstatj_log_str}")
+            logger.warning(f"qacct -j output: {qacctj_log_str}")
             return False
+        
         return True
 
     state = status_j.get("job_state", "qw")

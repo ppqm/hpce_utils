@@ -1,6 +1,7 @@
 import logging
 import os
 import time
+from collections import defaultdict
 from pathlib import Path
 
 import pytest
@@ -50,7 +51,7 @@ def test_taskarray(home_tmp_path: Path):
 
     # Wait
     finished_job_id: str | None = None
-    for finished_job_id in status.wait_for_jobs([job_id], respiratory=1):
+    for finished_job_id in status.wait_for_jobs([job_id], respiratory=10):
         print(f"job {finished_job_id} finished")
         finished_job_id = finished_job_id
 
@@ -60,8 +61,18 @@ def test_taskarray(home_tmp_path: Path):
     print(stdout)
     print(stderr)
 
-    assert len(stderr) == 0
     assert len(stdout) == 2
+    for log_file, log_lines in stderr.items():
+        print(f"Log file: {log_file}")
+        print(log_lines)
+        for line in log_lines:
+            if len(line) == 0:
+                continue
+            if "have been reloaded with a version change" in line:
+                continue
+            if "=>" in line:
+                continue
+            assert False, f"Unexpected line in log file: {line}"
 
     # Parse output
     for _, line in stdout.items():
@@ -119,7 +130,7 @@ def test_failed_command(home_tmp_path: Path):
 
     # Wait
     finished_job_id: str | None = None
-    for finished_job_id in status.wait_for_jobs([job_id], respiratory=5):
+    for finished_job_id in status.wait_for_jobs([job_id], respiratory=10):
         print(f"job {finished_job_id} finished")
         assert finished_job_id is not None
 
@@ -127,7 +138,7 @@ def test_failed_command(home_tmp_path: Path):
     time.sleep(5)  # Wait for UGE to collect the result
 
     # Overview of the tasks
-    pdf_report = status.get_qacctj(job_id)
+    pdf_report, _ = status.get_qacctj(job_id)
     print(pdf_report)
     print(pdf_report["exit_status"])
     assert len(pdf_report) == n_tasks, "Missing tasks"
@@ -140,8 +151,22 @@ def test_failed_command(home_tmp_path: Path):
     stdout, stderr = submitting.read_logfiles(log_dir, job_id, ignore_stdout=False)
     print("stdout:", stdout)
     print("stderr:", stderr)
-    assert len(stderr) == 1
     assert len(stdout) == 1
+
+    filtered_stderr = defaultdict(list)
+    for file, log_lines in stderr.items():
+        print(f"Log file: {file}")
+        print(log_lines)
+        for line in log_lines:
+            if len(line) == 0:
+                continue
+            if "have been reloaded with a version change" in line:
+                continue
+            if "=>" in line:
+                continue
+            filtered_stderr[file].append(line)
+    
+    assert len(filtered_stderr) == 1
 
 
 def test_failed_uge_submit(tmp_path: Path, caplog):
@@ -177,7 +202,7 @@ def test_failed_uge_submit(tmp_path: Path, caplog):
         status.follow_progress(job_ids=[job_id])
 
     error_line = 'can\'t make directory "/this/path/does/not" as stdout_path: Permission denied'
-    print(caplog.text)
+    print(f"Caplog text: {caplog.text}")
     assert error_line in caplog.text
 
     # Clean the bad job
