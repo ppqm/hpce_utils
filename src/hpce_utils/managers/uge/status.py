@@ -350,6 +350,7 @@ def follow_progress(
     qstat, qstatu_log_str = get_qstat(
         username, max_retries=max_retries, update_interval=update_interval
     )
+    print(qstat)
 
     if not len(qstat):
         logger.warning(f"No jobs for {username}")
@@ -377,6 +378,7 @@ def follow_progress(
         if job.running + job.pending == 0 and job.error > 0:
             # crashed job
             errors = _get_errors_from_qstatj(qstatj)
+            print(errors)
             logger.error(f"UGE job {job_id} is NOT starting for the following reason(s):")
             for error in errors:
                 logger.error(error)
