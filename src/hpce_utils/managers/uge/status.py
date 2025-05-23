@@ -350,7 +350,6 @@ def follow_progress(
     qstat, qstatu_log_str = get_qstat(
         username, max_retries=max_retries, update_interval=update_interval
     )
-    print(qstat)
 
     if not len(qstat):
         logger.warning(f"No jobs for {username}")
@@ -378,7 +377,6 @@ def follow_progress(
         if job.running + job.pending == 0 and job.error > 0:
             # crashed job
             errors = _get_errors_from_qstatj(qstatj)
-            print(errors)
             logger.error(f"UGE job {job_id} is NOT starting for the following reason(s):")
             for error in errors:
                 logger.error(error)
@@ -432,7 +430,6 @@ def follow_progress(
                     array_bar.job_id, cross_check=True, n_total_jobs=array_bar.n_total
                 ):
                     array_bar.finish()
-                    array_bar.log_errors()
                 else:
                     logger.warning(
                         f"Job {array_bar.job_id} not found in qstat, but cross-check showed it is not finished"
@@ -443,7 +440,6 @@ def follow_progress(
                             f"Cross check failed for job {array_bar.job_id} 5 times in a row. Assuming it is finished."
                         )
                         array_bar.finish()
-                        array_bar.log_errors()
 
             continue
 
@@ -464,7 +460,6 @@ def follow_progress(
                     array_bar.job_id, cross_check=True, n_total_jobs=array_bar.n_total
                 ):
                     array_bar.finish()
-                    array_bar.log_errors()
                 else:
                     logger.warning(
                         f"Job {array_bar.job_id} not found in qstat, but cross-check showed it is not finished"
@@ -476,7 +471,6 @@ def follow_progress(
                             f"Cross check failed for job {array_bar.job_id} 5 times in a row. Assuming it is finished."
                         )
                         array_bar.finish()
-                        array_bar.log_errors()
                 continue
 
             job_status = dict(job_info.iloc[0])
@@ -486,6 +480,7 @@ def follow_progress(
             time.sleep(update_interval)
 
     for bar in progresses:
+        bar.log_errors()
         bar.close()
 
     return

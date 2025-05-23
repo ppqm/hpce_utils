@@ -197,7 +197,6 @@ def test_failed_uge_submit(tmp_path: Path, caplog):
 
     assert job_id is not None
     print(job_id)
-    time.sleep(15)
 
     with caplog.at_level(logging.WARNING):
         status.follow_progress(job_ids=[job_id])
