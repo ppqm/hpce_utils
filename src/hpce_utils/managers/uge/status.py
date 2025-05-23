@@ -5,12 +5,14 @@ import re
 import subprocess
 import time
 from collections import defaultdict
+from pathlib import Path
 from typing import Dict, Iterator, List, Optional, Tuple, Union
 
 import pandas as pd  # type: ignore
 from pandas import DataFrame  # type: ignore
 from tqdm import tqdm  # type: ignore
 
+from hpce_utils.managers.uge import submitting
 from hpce_utils.shell import execute, execute_with_retry  # type: ignore
 
 logger = logging.getLogger(__name__)
@@ -351,11 +353,6 @@ def follow_progress(
         username, max_retries=max_retries, update_interval=update_interval
     )
 
-    if not len(qstat):
-        logger.warning(f"No jobs for {username}")
-        logger.warning(qstatu_log_str)
-        return
-
     # TODO Add check that job_id is even valid
     if job_ids is None:
         job_ids = qstat["job"].unique()
@@ -419,28 +416,6 @@ def follow_progress(
             continue
         except subprocess.TimeoutExpired as exc:
             logger.warning(f"Timeout getting qstat: {exc}")
-            continue
-
-        if len(qstat) == 0:
-            logger.info("got empty qstat")
-            logger.info(qstatu_log_str)
-            for _, array_bar in enumerate(progresses):
-                # double check if job is done, using qstat -j
-                if _uge_is_job_done(
-                    array_bar.job_id, cross_check=True, n_total_jobs=array_bar.n_total
-                ):
-                    array_bar.finish()
-                else:
-                    logger.warning(
-                        f"Job {array_bar.job_id} not found in qstat, but cross-check showed it is not finished"
-                    )
-                    consecutive_qacct_counter[array_bar.job_id] += 1
-                    if consecutive_qacct_counter[array_bar.job_id] >= 5:
-                        logger.warning(
-                            f"Cross check failed for job {array_bar.job_id} 5 times in a row. Assuming it is finished."
-                        )
-                        array_bar.finish()
-
             continue
 
         # While jobs are not done
@@ -522,7 +497,8 @@ def get_qstat(
     log_str = f"qstat -u {username} gave {stdout}"
 
     if stdout is None or len(stdout) == 0:
-        return pd.DataFrame({}), log_str
+        empty_df = pd.DataFrame(columns=["job", "running", "pending", "error"])
+        return empty_df, log_str
 
     pdf = parse_qstat(stdout)
     pdf_ = parse_taskarray(pdf)
@@ -596,6 +572,52 @@ def wait_for_jobs(
     end_time = time.time()
     diff_time = end_time - start_time
     logger.info(f"All jobs finished and took {diff_time/60/60:.2f}h")
+
+
+def wait_for_jobs_without_qstat(
+    jobs: list[str],
+    scr: Path,
+    user_email: str | None = None,
+    name: str = "UGEHoldJob",
+    log_dir: Path | None = submitting.DEFAULT_LOG_DIR,
+    generate_dirs: bool = True,
+    update_interval: int = 5,
+) -> Path:
+    """
+    Wait for by submitting a job using -hold-jid, which will only start when the other jobs
+    are finished. This submitted job creates a file which is used to check if the job is finished.
+    This avoids checking qstat, which puts some load on the server.
+    """
+    job_ids_joined = "__".join(jobs)
+    filename = f"hold_job_{job_ids_joined}.finished"
+    script_filename = f"hold_job_{job_ids_joined}.sh"
+    finished_file = (scr / filename).resolve()
+    command = f"touch {finished_file}"
+
+    hold_job_id = ",".join(jobs)
+    script = submitting.generate_hold_script(
+        hold_job_id,
+        cmd=command,
+        user_email=user_email,
+        name=name,
+        log_dir=log_dir,
+        generate_dirs=generate_dirs,
+    )
+
+    job_id_hold_job, _ = submitting.submit_script(
+        script,
+        scr=scr,
+        filename=script_filename,
+    )
+
+    logger.info(f"Submitted job {job_id_hold_job} to wait for jobs {jobs}")
+    logger.info(f"To manually skip waiting, create the file {finished_file}")
+
+    while not finished_file.exists():
+        time.sleep(update_interval)
+
+    logger.info(f"Jobs {jobs} have finished, continuing...")
+    return finished_file
 
 
 def _uge_is_job_done(
