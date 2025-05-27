@@ -515,7 +515,7 @@ def get_qacctj(job_id: Union[str, int]) -> pd.DataFrame:
         if exc.returncode == 1 and "not found" in exc.stderr and job_id in exc.stderr:
             # conclude that job is not finished
             logger.info(f"Job {job_id} not found in qacct")
-            return pd.DataFrame({})
+            return pd.DataFrame({}), exc.stderr
 
         raise exc
 
@@ -574,7 +574,7 @@ def wait_for_jobs(
     logger.info(f"All jobs finished and took {diff_time/60/60:.2f}h")
 
 
-def wait_for_jobs_without_qstat(
+def wait_for_jobs_using_hold_job(
     jobs: list[str],
     scr: Path,
     user_email: str | None = None,

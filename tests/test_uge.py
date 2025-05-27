@@ -1,7 +1,6 @@
 import logging
 import os
 import time
-from collections import defaultdict
 from pathlib import Path
 
 import pytest
@@ -56,23 +55,16 @@ def test_taskarray(home_tmp_path: Path):
         finished_job_id = finished_job_id_
 
     assert finished_job_id is not None
-    stdout, stderr = submitting.read_logfiles(log_dir, finished_job_id, ignore_stdout=False)
+
+    stdout, stderr = submitting.read_logfiles(
+        log_dir, finished_job_id, ignore_stdout=False, filter_lmod=True
+    )
 
     print(stdout)
     print(stderr)
 
     assert len(stdout) == 2
-    for log_file, log_lines in stderr.items():
-        print(f"Log file: {log_file}")
-        print(log_lines)
-        for line in log_lines:
-            if len(line) == 0:
-                continue
-            if "have been reloaded with a version change" in line:
-                continue
-            if "=>" in line:
-                continue
-            assert False, f"Unexpected line in log file: {line}"
+    assert len(stderr) == 0
 
     # Parse output
     for _, lines in stdout.items():
@@ -148,25 +140,13 @@ def test_failed_command(home_tmp_path: Path):
     assert min(pdf_report["exit_status"]) == 0, "Exit code mismatch"
 
     # Get the log files
-    stdout, stderr = submitting.read_logfiles(log_dir, job_id, ignore_stdout=False)
+    stdout, stderr = submitting.read_logfiles(
+        log_dir, job_id, ignore_stdout=False, filter_lmod=True
+    )
     print("stdout:", stdout)
     print("stderr:", stderr)
     assert len(stdout) == 1
-
-    filtered_stderr = defaultdict(list)
-    for file, log_lines in stderr.items():
-        print(f"Log file: {file}")
-        print(log_lines)
-        for line in log_lines:
-            if len(line) == 0:
-                continue
-            if "have been reloaded with a version change" in line:
-                continue
-            if "=>" in line:
-                continue
-            filtered_stderr[file].append(line)
-
-    assert len(filtered_stderr) == 1
+    assert len(stderr) == 1
 
 
 def test_failed_uge_submit(tmp_path: Path, caplog):

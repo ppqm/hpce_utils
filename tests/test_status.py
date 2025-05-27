@@ -233,7 +233,7 @@ def test_follow_progress_with_initial_qstat_failures(caplog):
     assert "returncode" in all_logs
 
 
-def test_wait_for_jobs_without_qstat(home_tmp_path: Path):
+def test_wait_for_jobs_using_hold_job(home_tmp_path: Path):
     print("scratch:", home_tmp_path)
     log_dir = home_tmp_path / "uge_testlogs"
     script_1: str = submitting.generate_taskarray_script(
@@ -263,7 +263,7 @@ def test_wait_for_jobs_without_qstat(home_tmp_path: Path):
 
     print(job_id_1, job_id_2)
 
-    finished_file = status.wait_for_jobs_without_qstat(
+    finished_file = status.wait_for_jobs_using_hold_job(
         [job_id_1, job_id_2],
         scr=home_tmp_path,
         log_dir=log_dir,

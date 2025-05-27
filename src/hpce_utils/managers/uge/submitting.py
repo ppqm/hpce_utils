@@ -1,4 +1,5 @@
 import logging
+from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
 
@@ -12,6 +13,11 @@ DEFAULT_LOG_DIR = Path("./ugelogs/")
 TEMPLATE_TASKARRAY = Path(__file__).parent / "templates" / "submit-task-array.jinja"
 TEMPLATE_HOLDING = Path(__file__).parent / "templates" / "submit-holding.jinja"
 logger = logging.getLogger(__name__)
+
+LMOD_LINES = [
+    "have been reloaded with a version change",
+    "=>",
+]
 
 
 def generate_command(sync: bool = False, export: bool = False) -> str:
@@ -222,7 +228,10 @@ def delete_job(job_id: Optional[str]) -> None:
 
 
 def read_logfiles(
-    log_path: Path, job_id: str, ignore_stdout: bool = True
+    log_path: Path,
+    job_id: str,
+    ignore_stdout: bool = True,
+    filter_lmod: bool = False,
 ) -> Tuple[Dict[Path, List[str]], Dict[Path, List[str]]]:
     """Read logfiles produced by UGE task array. Ignore empty log files"""
     logger.debug(f"Looking for finished log files in {log_path}")
@@ -232,6 +241,9 @@ def read_logfiles(
         if filename.stat().st_size == 0:
             continue
         stderr[filename] = parse_logfile(filename)
+
+    if filter_lmod:
+        stderr = filter_stderr_for_lmod(stderr)
 
     if ignore_stdout:
         return dict(), stderr
@@ -244,6 +256,19 @@ def read_logfiles(
         stdout[filename] = parse_logfile(filename)
 
     return stdout, stderr
+
+
+def filter_stderr_for_lmod(stderr_dict: Dict[Path, List[str]]) -> Dict[Path, List[str]]:
+    """Filter stderr for lmod lines"""
+
+    stderr_filtered = defaultdict(list)
+    for filename, lines in stderr_dict.items():
+        for line in lines:
+            if len(line) == 0 or any(lmod_line in line for lmod_line in LMOD_LINES):
+                continue
+            stderr_filtered[filename].append(line)
+
+    return dict(stderr_filtered)
 
 
 def parse_logfile(filename: Path) -> List[str]:
