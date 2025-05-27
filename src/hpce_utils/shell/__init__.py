@@ -141,21 +141,32 @@ def execute_with_retry(
     max_retries: int = 3,
     update_interval: int = 5,
 ) -> Tuple[str, str]:
+    """Execute command in directory, and return stdout and stderr
+
+    :param cmd: The shell command
+    :param cwd: Change directory to work directory
+    :param shell: Use shell or not in subprocess
+    :param timeout: Stop the process at timeout (seconds)
+    :param max_retries: How many times to rerun the command before raising an error
+    :param update_interval: How long to wait between retries
+    :returns: stdout and stderr as string
+    :raises: subprocess.CalledProcessError if command fails more than max_retries
+    :raises: subprocess.TimeoutExpired if timeout is reached and the command failed more than max_retries
+    :raises: FileNotFoundError if command is not found
+    """
 
     num_retries = 0
-    while num_retries < max_retries:
+    while True:
         try:
             stdout, stderr = execute(cmd, cwd=cwd, shell=shell, timeout=timeout, check=True)
-            break
-        except (subprocess.TimeoutExpired, subprocess.CalledProcessError):
+            return stdout, stderr
+        except (subprocess.TimeoutExpired, subprocess.CalledProcessError) as exc:
             logger.warning("Error while executing %s. Try again later.", cmd)
             time.sleep(update_interval)
+            if num_retries >= max_retries:
+                logger.error("Max retries reached for command %s", cmd)
+                raise exc
             num_retries += 1
-    else:
-        logger.error("Failed to get qstatj after %d retries", max_retries)
-        return "", ""
-
-    return stdout, stderr
 
 
 def source(bashfile):

@@ -50,22 +50,25 @@ def test_taskarray(home_tmp_path: Path):
 
     # Wait
     finished_job_id: str | None = None
-    for finished_job_id in status.wait_for_jobs([job_id], respiratory=1):
+    for finished_job_id_ in status.wait_for_jobs([job_id], respiratory=10):
         print(f"job {finished_job_id} finished")
-        finished_job_id = finished_job_id
+        finished_job_id = finished_job_id_
 
     assert finished_job_id is not None
-    stdout, stderr = submitting.read_logfiles(log_dir, finished_job_id, ignore_stdout=False)
+
+    stdout, stderr = submitting.read_logfiles(
+        log_dir, finished_job_id, ignore_stdout=False, filter_lmod=True
+    )
 
     print(stdout)
     print(stderr)
 
-    assert len(stderr) == 0
     assert len(stdout) == 2
+    assert len(stderr) == 0
 
     # Parse output
-    for _, line in stdout.items():
-        assert success_string in line
+    for _, lines in stdout.items():
+        assert success_string in lines
 
 
 @pytest.mark.skip(reason="Not implemented")
@@ -119,7 +122,7 @@ def test_failed_command(home_tmp_path: Path):
 
     # Wait
     finished_job_id: str | None = None
-    for finished_job_id in status.wait_for_jobs([job_id], respiratory=5):
+    for finished_job_id in status.wait_for_jobs([job_id], respiratory=10):
         print(f"job {finished_job_id} finished")
         assert finished_job_id is not None
 
@@ -127,7 +130,7 @@ def test_failed_command(home_tmp_path: Path):
     time.sleep(5)  # Wait for UGE to collect the result
 
     # Overview of the tasks
-    pdf_report = status.get_qacctj(job_id)
+    pdf_report, _ = status.get_qacctj(job_id)
     print(pdf_report)
     print(pdf_report["exit_status"])
     assert len(pdf_report) == n_tasks, "Missing tasks"
@@ -137,11 +140,13 @@ def test_failed_command(home_tmp_path: Path):
     assert min(pdf_report["exit_status"]) == 0, "Exit code mismatch"
 
     # Get the log files
-    stdout, stderr = submitting.read_logfiles(log_dir, job_id, ignore_stdout=False)
+    stdout, stderr = submitting.read_logfiles(
+        log_dir, job_id, ignore_stdout=False, filter_lmod=True
+    )
     print("stdout:", stdout)
     print("stderr:", stderr)
-    assert len(stderr) == 1
     assert len(stdout) == 1
+    assert len(stderr) == 1
 
 
 def test_failed_uge_submit(tmp_path: Path, caplog):
@@ -177,7 +182,7 @@ def test_failed_uge_submit(tmp_path: Path, caplog):
         status.follow_progress(job_ids=[job_id])
 
     error_line = 'can\'t make directory "/this/path/does/not" as stdout_path: Permission denied'
-    print(caplog.text)
+    print(f"Caplog text: {caplog.text}")
     assert error_line in caplog.text
 
     # Clean the bad job
